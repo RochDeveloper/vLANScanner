@@ -4,6 +4,13 @@ const { exec } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const net = require('net');
+const {
+  isIpv4,
+  getHostname,
+  getNbtstat,
+  parseNbtstatHostname,
+  clearHostnameCaches
+} = require('./hostname');
 
 let mainWindow;
 let stopScanFlag = false;
@@ -150,25 +157,17 @@ function getLocalNetworks() {
 
 function pingHost(ip, timeout = 800) {
   return new Promise((resolve) => {
-    exec(`ping -n 1 -w ${timeout} ${ip}`, { timeout: timeout + 500 }, (err, stdout) => {
+    if (!isIpv4(ip)) return resolve({ ip, alive: false });
+    exec(`ping -n 1 -w ${timeout} ${ip}`, { timeout: timeout + 500, windowsHide: true }, (err, stdout) => {
       resolve({ ip, alive: !err && (stdout.includes('TTL=') || stdout.includes('ttl=')) });
-    });
-  });
-}
-
-function getHostname(ip) {
-  return new Promise((resolve) => {
-    exec(`nslookup ${ip}`, { timeout: 2500 }, (err, stdout) => {
-      if (err || !stdout) return resolve('');
-      const m = stdout.match(/Name:\s*(.+)/i);
-      resolve(m ? m[1].trim() : '');
     });
   });
 }
 
 function getMac(ip) {
   return new Promise((resolve) => {
-    exec(`arp -a ${ip}`, { timeout: 2000 }, (err, stdout) => {
+    if (!isIpv4(ip)) return resolve('');
+    exec(`arp -a ${ip}`, { timeout: 2000, windowsHide: true }, (err, stdout) => {
       if (err || !stdout) return resolve('');
       for (const line of stdout.split('\n')) {
         if (line.includes(ip)) {
@@ -326,12 +325,7 @@ function grabSshBanner(ip) {
 
 // Method 3: SMB fingerprint via NetBIOS (port 445)
 function grabSmbInfo(ip) {
-  return new Promise((resolve) => {
-    exec(`nbtstat -A ${ip}`, { timeout: 3000 }, (err, stdout) => {
-      if (err || !stdout) return resolve('');
-      resolve(stdout.toLowerCase());
-    });
-  });
+  return getNbtstat(ip);
 }
 
 // Method 4: HTTP Server header
@@ -525,6 +519,7 @@ ipcMain.handle('stop-scan', () => { stopScanFlag = true; });
 
 ipcMain.handle('scan-network', async (event, { base, startHost = 1, endHost = 254, scanPorts: doPorts = true }) => {
   stopScanFlag = false;
+  clearHostnameCaches();
   const total = endHost - startHost + 1;
   let scanned = 0;
   const results = [];
@@ -540,7 +535,7 @@ ipcMain.handle('scan-network', async (event, { base, startHost = 1, endHost = 25
       if (stopScanFlag) break;
       event.sender.send('scan-progress', { scanned: ++scanned, total, ip, status: 'resolviendo' });
 
-      const [hostname, mac] = await Promise.all([getHostname(ip), getMac(ip)]);
+      let [hostname, mac] = await Promise.all([getHostname(ip), getMac(ip)]);
       const vendor = getVendor(mac);
 
       let openPorts = [];
@@ -569,6 +564,7 @@ ipcMain.handle('scan-network', async (event, { base, startHost = 1, endHost = 25
       ]);
       if (sipResult.isSip) banner += ' sip-confirmed';
       const sipConfirmed = sipResult.isSip;
+      if (!hostname && smbInfo) hostname = parseNbtstatHostname(smbInfo, ip);
       const deviceType = guessDeviceType(openPorts, hostname, vendor, banner, sipConfirmed);
       const os = detectOs({
         ttl: ttlInfo.ttl, osHint: ttlInfo.osHint,

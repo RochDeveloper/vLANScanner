@@ -9,7 +9,7 @@ const { PortScanner, HttpBannerProbe, ServiceBannerProbe } = require('./network/
 const { HostnameResolver } = require('./network/hostname-resolver');
 const { SmbProbe } = require('./network/smb-probe');
 const { PrinterProbe } = require('./network/printer-probe');
-const { MobilePhoneClassifier } = require('./identification/mobile-phone-classifier');
+const { analyzeMobilePhone } = require('./identification/mobile-phone-classifier');
 const { VendorIdentifier } = require('./identification/vendor-identifier');
 const { DeviceClassifier } = require('./identification/device-classifier');
 const { OsFingerprintService } = require('./identification/os-detector');
@@ -36,7 +36,7 @@ function buildServices() {
   const hostnameResolver = new HostnameResolver();
   const smbProbe = new SmbProbe();
   const printerProbe = new PrinterProbe({ timeout: 8000 });
-  const mobilePhoneClassifier = new MobilePhoneClassifier();
+  const mobilePhoneClassifier = { analyze: analyzeMobilePhone };
   const vendorIdentifier = new VendorIdentifier();
   const deviceClassifier = new DeviceClassifier();
   const osFingerprintService = new OsFingerprintService();

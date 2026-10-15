@@ -43,7 +43,7 @@ function mobileHostnameToken(hostname) {
 }
 
 function mobileOsDetected(signals) {
-  const combined = normalizeText(`${signals.os || ''} ${signals.banner || ''}`);
+  const combined = normalizeText(`${signals.os || ''} ${signals.banner || ''} ${signals.hostname || ''}`);
   if (combined.includes('android')) return 'android';
   if (combined.includes('ios') || combined.includes('iphone') || combined.includes('ipados') || combined.includes('ipad')) return 'ios';
   return '';
@@ -106,7 +106,7 @@ function derivePhoneHint(input = {}) {
 
 function normalizeMobileOs(os, signals = {}) {
   const signalObject = signals && typeof signals === 'object' ? signals : {};
-  const combined = normalizeText(`${os || ''} ${signalObject.banner || ''}`);
+  const combined = normalizeText(`${os || ''} ${signalObject.banner || ''} ${signalObject.hostname || ''}`);
   if (combined.includes('android')) return 'Android';
   if (combined.includes('ios') || combined.includes('iphone') || combined.includes('ipados') || combined.includes('ipad')) return 'iOS';
   if (signalObject.isPhone === true) return 'Mobile OS (unknown)';

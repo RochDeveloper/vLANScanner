@@ -60,7 +60,7 @@ test('MobilePhoneClassifier soporta iPhone sin vendor claro', () => {
     ttl: 64
   });
   assert.equal(analysis.isPhone, true);
-  assert.equal(analysis.phoneOS, 'Mobile OS (unknown)');
+  assert.equal(analysis.phoneOS, 'iOS');
   assert.equal(analysis.phoneHint, null);
 });
 
@@ -74,6 +74,10 @@ test('normalizeMobileOs funciona', () => {
   assert.equal(classifier.normalizeMobileOs('iOS 17'), 'iOS');
 });
 
+test('normalizeMobileOs infiere SO por hostname', () => {
+  assert.equal(classifier.normalizeMobileOs('', { hostname: 'iPhone de Ana' }), 'iOS');
+  assert.equal(classifier.normalizeMobileOs('', { hostname: 'android-phone' }), 'Android');
+});
 test('isMobileConflict detecta conflictos', () => {
   assert.deepEqual(classifier.isMobileConflict({ openPorts: [135], sipConfirmed: true }), ['pc-ports', 'sip']);
 });

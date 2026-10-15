@@ -1,973 +1,159 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
-<title>VLAN Network Scanner</title>
-<style>
-  :root {
-    --bg0: #0d1117;
-    --bg1: #161b22;
-    --bg2: #1c2128;
-    --bg3: #252d38;
-    --bg4: #2d3748;
-    --border: #30363d;
-    --border2: #3d4a5c;
-    --text1: #e6edf3;
-    --text2: #8b949e;
-    --text3: #6e7681;
-    --accent: #1f6feb;
-    --accent-light: #388bfd;
-    --green: #3fb950;
-    --red: #f85149;
-    --amber: #d29922;
-    --purple: #bc8cff;
-    --cyan: #39c5cf;
-    --teal: #2ea043;
-    --radius: 6px;
-    --radius-lg: 10px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg0); color: var(--text1); height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
-
-  /* ── Titlebar ── */
-  #titlebar { height: 38px; background: var(--bg1); border-bottom: 1px solid var(--border); display: flex; align-items: center; -webkit-app-region: drag; flex-shrink: 0; }
-  .tb-icon { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 16px; -webkit-app-region: no-drag; }
-  .tb-title { font-size: 12px; font-weight: 500; color: var(--text2); flex: 1; }
-  .tb-controls { display: flex; -webkit-app-region: no-drag; }
-  .tb-btn { width: 46px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; color: var(--text2); transition: background .15s; }
-  .tb-btn:hover { background: var(--bg3); }
-  .tb-btn.close:hover { background: #c42b1c; color: #fff; }
-
-  /* ── Toolbar ── */
-  #toolbar { background: var(--bg1); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
-  .toolbar-section { display: flex; align-items: center; gap: 6px; }
-  .sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
-  label.lbl { font-size: 11px; color: var(--text2); white-space: nowrap; }
-  select, input[type=text], input[type=number] {
-    background: var(--bg2); border: 1px solid var(--border); color: var(--text1);
-    border-radius: var(--radius); padding: 4px 8px; font-size: 12px; outline: none;
-  }
-  select:focus, input:focus { border-color: var(--accent); }
-  input[type=number] { width: 56px; }
-  .btn { padding: 5px 14px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text1); font-size: 12px; cursor: pointer; transition: all .15s; white-space: nowrap; }
-  .btn:hover { background: var(--bg4); border-color: var(--accent); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-  .btn.primary:hover { background: var(--accent-light); }
-  .btn.danger { background: #3d1f1f; border-color: var(--red); color: var(--red); }
-  .btn.danger:hover { background: #5a2020; }
-  .btn:disabled { opacity: 0.4; cursor: default; }
-  .btn-icon { padding: 5px 8px; }
-  #iface-select { min-width: 180px; }
-
-  /* ── Main layout ── */
-  #main { flex: 1; display: flex; overflow: hidden; }
-
-  /* ── Left panel ── */
-  #left-panel { width: 220px; background: var(--bg1); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
-  .panel-header { padding: 8px 12px; font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--border); }
-  .panel-body { flex: 1; overflow-y: auto; padding: 6px; }
-  .tree-item { padding: 5px 8px; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); transition: background .12s; margin-bottom: 1px; }
-  .tree-item:hover { background: var(--bg3); color: var(--text1); }
-  .tree-item.active { background: #1f3a5f; color: var(--accent-light); }
-  .tree-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .tree-badge { margin-left: auto; font-size: 10px; background: var(--bg4); border-radius: 10px; padding: 1px 6px; color: var(--text3); }
-  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 6px; }
-  .stat-label { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
-  .stat-val { font-size: 18px; font-weight: 600; }
-  .stat-val.green { color: var(--green); }
-  .stat-val.amber { color: var(--amber); }
-  .stat-val.red { color: var(--red); }
-
-  /* ── Center: results table ── */
-  #center { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #results-header { background: var(--bg1); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; height: 36px; gap: 8px; flex-shrink: 0; }
-  .results-tab { font-size: 12px; padding: 0 8px; height: 36px; display: flex; align-items: center; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; }
-  .results-tab.active { color: var(--text1); border-bottom-color: var(--accent); }
-  #search-box { margin-left: auto; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px 8px; font-size: 12px; color: var(--text1); outline: none; width: 180px; }
-  #search-box:focus { border-color: var(--accent); }
-  #table-wrap { flex: 1; overflow: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  thead th { position: sticky; top: 0; background: var(--bg2); padding: 7px 10px; text-align: left; font-weight: 500; color: var(--text2); font-size: 11px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
-  thead th:hover { color: var(--text1); }
-  thead th.sorted-asc::after { content: ' ▲'; font-size: 9px; }
-  thead th.sorted-desc::after { content: ' ▼'; font-size: 9px; }
-  tbody tr { border-bottom: 1px solid #1a1f27; cursor: pointer; transition: background .1s; }
-  tbody tr:hover { background: var(--bg2); }
-  tbody tr.selected { background: #1a2d47; }
-  tbody td { padding: 6px 10px; color: var(--text1); }
-  .td-ip { font-family: 'Consolas', monospace; color: var(--accent-light); font-weight: 500; }
-  .td-mac { font-family: 'Consolas', monospace; color: var(--text2); font-size: 11px; }
-  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
-  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .status-dot.offline { background: var(--red); }
-  .status-dot.scanning { background: var(--amber); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .port-badge { display: inline-block; background: var(--bg4); border: 1px solid var(--border2); border-radius: 4px; padding: 1px 5px; font-size: 10px; color: var(--text2); margin: 1px; font-family: monospace; }
-  .port-badge.ssh { color: var(--green); border-color: var(--green); }
-  .port-badge.rdp { color: var(--purple); border-color: var(--purple); }
-  .port-badge.http { color: var(--cyan); border-color: var(--cyan); }
-  .port-badge.smb { color: var(--amber); border-color: var(--amber); }
-  .device-icon { font-size: 14px; }
-  .vendor-badge { font-size: 10px; background: var(--bg3); border-radius: 4px; padding: 1px 6px; color: var(--text3); }
-
-  /* ── Progress bar ── */
-  #progress-bar-wrap { height: 3px; background: var(--bg2); flex-shrink: 0; }
-  #progress-bar { height: 3px; background: var(--accent); width: 0; transition: width .3s; }
-
-  /* ── Status bar ── */
-  #statusbar { height: 24px; background: var(--bg1); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; gap: 16px; flex-shrink: 0; }
-  .sb-item { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
-  .sb-item .val { color: var(--text2); }
-
-  /* ── Right panel: device details ── */
-  #right-panel { width: 260px; background: var(--bg1); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
-  #detail-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 12px; text-align: center; padding: 20px; }
-  #detail-content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
-  .detail-icon { font-size: 36px; text-align: center; margin-bottom: 8px; }
-  .detail-name { font-size: 14px; font-weight: 600; text-align: center; margin-bottom: 4px; }
-  .detail-ip { font-family: monospace; color: var(--accent-light); text-align: center; font-size: 13px; margin-bottom: 12px; }
-  .detail-section { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 5px; }
-  .detail-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px; }
-  .detail-key { font-size: 11px; color: var(--text3); white-space: nowrap; }
-  .detail-val { font-size: 11px; color: var(--text1); text-align: right; word-break: break-all; font-family: monospace; }
-  .ping-btn { display: block; width: 100%; margin-top: 10px; }
-
-  /* ── Empty state ── */
-  #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); gap: 10px; }
-  #empty-state .es-icon { font-size: 48px; opacity: 0.4; }
-  #empty-state .es-text { font-size: 13px; }
-
-  /* ── Topology canvas tab ── */
-  #topo-wrap { flex: 1; background: var(--bg0); display: none; overflow: hidden; position: relative; }
-  #topo-canvas { position: absolute; inset: 0; }
-  .topo-controls { position: absolute; bottom: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; }
-  .topo-ctrl-btn { width: 30px; height: 30px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; color: var(--text2); display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .topo-ctrl-btn:hover { background: var(--bg3); color: var(--text1); }
-
-  /* ── VLAN config tab ── */
-  #vlan-wrap { flex: 1; display: none; overflow: auto; padding: 16px; }
-  .vlan-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .vlan-table th { padding: 8px 12px; text-align: left; font-weight: 500; color: var(--text2); border-bottom: 1px solid var(--border); }
-  .vlan-table td { padding: 8px 12px; border-bottom: 1px solid #1a1f27; }
-  .vlan-color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .add-vlan-form { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
-  .form-field { display: flex; flex-direction: column; gap: 3px; }
-  .form-field label { font-size: 10px; color: var(--text3); }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--border2); }
-</style>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VLAN Network Scanner</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-
-<!-- Titlebar -->
-<div id="titlebar">
-  <div class="tb-icon">🔍</div>
-  <div class="tb-title">VLAN Network Scanner — Advanced Edition</div>
-  <div class="tb-controls">
-    <div class="tb-btn" onclick="api.windowMinimize()">─</div>
-    <div class="tb-btn" onclick="api.windowMaximize()">□</div>
-    <div class="tb-btn close" onclick="api.windowClose()">✕</div>
-  </div>
-</div>
-
-<!-- Toolbar -->
-<div id="toolbar">
-  <div class="toolbar-section">
-    <label class="lbl">Interfaz:</label>
-    <select id="iface-select" onchange="onIfaceChange()"><option>Cargando...</option></select>
-  </div>
-  <div class="sep"></div>
-  <div class="toolbar-section" id="mode-simple">
-    <label class="lbl">IP Inicio:</label>
-    <input type="text" id="ip-from" value="192.168.1.1" style="width:130px" placeholder="10.165.2.1">
-    <label class="lbl">— Fin:</label>
-    <input type="text" id="ip-to" value="192.168.1.254" style="width:130px" placeholder="10.165.31.254">
-  </div>
-  <div class="sep"></div>
-  <div class="toolbar-section">
-    <label class="lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer">
-      <input type="checkbox" id="chk-ports" checked> Puertos
-    </label>
-    <label class="lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer">
-      <input type="checkbox" id="chk-hostname" checked> Hostnames
-    </label>
-  </div>
-  <div class="sep"></div>
-  <button class="btn primary" id="btn-scan" onclick="startScan()">▶ Escanear</button>
-  <button class="btn danger" id="btn-stop" onclick="stopScan()" disabled>■ Detener</button>
-  <div class="sep"></div>
-  <button class="btn btn-icon" title="Exportar CSV" onclick="exportData('csv')">📄 CSV</button>
-  <button class="btn btn-icon" title="Exportar JSON" onclick="exportData('json')">📋 JSON</button>
-</div>
-
-<!-- Main -->
-<div id="main">
-
-  <!-- Left panel -->
-  <div id="left-panel">
-    <div class="panel-header">Red detectada</div>
-    <div class="panel-body">
-      <div id="stats-cards">
-        <div class="stat-card"><div class="stat-label">Hosts online</div><div class="stat-val green" id="stat-online">0</div></div>
-        <div class="stat-card"><div class="stat-label">Escaneados</div><div class="stat-val amber" id="stat-scanned">0</div></div>
-        <div class="stat-card"><div class="stat-label">VLANs</div><div class="stat-val" id="stat-vlans">0</div></div>
-      </div>
-      <div class="panel-header" style="padding-left:0;margin-top:8px">VLANs / Filtros</div>
-      <div class="tree-item active" onclick="filterBy('all')" id="filter-all">
-        <span class="tree-dot" style="background:#388bfd"></span> Todos los hosts
-        <span class="tree-badge" id="badge-all">0</span>
-      </div>
-      <div id="vlan-filter-list"></div>
-      <div class="panel-header" style="padding-left:0;margin-top:8px">Tipos</div>
-      <div id="type-filter-list"></div>
+  <header id="titlebar">
+    <div class="tb-icon">🔍</div>
+    <div class="tb-title">VLAN Network Scanner — Advanced Edition</div>
+    <div class="tb-controls">
+      <button class="tb-btn" id="btn-minimize" type="button" aria-label="Minimizar">─</button>
+      <button class="tb-btn" id="btn-maximize" type="button" aria-label="Maximizar">□</button>
+      <button class="tb-btn close" id="btn-close" type="button" aria-label="Cerrar">✕</button>
     </div>
-  </div>
+  </header>
 
-  <!-- Center -->
-  <div id="center">
-    <div id="results-header">
-      <div class="results-tab active" onclick="switchView('table',this)">📋 Hosts</div>
-      <div class="results-tab" onclick="switchView('topo',this)">🗺 Topología</div>
-      <div class="results-tab" onclick="switchView('vlan',this)">🏷 VLANs</div>
-      <input id="search-box" placeholder="🔍 Buscar IP, hostname, vendor..." oninput="filterTable()">
+  <nav id="toolbar" aria-label="Controles del escáner">
+    <div class="toolbar-section">
+      <label class="lbl" for="iface-select">Interfaz:</label>
+      <select id="iface-select"><option>Cargando...</option></select>
     </div>
+    <div class="sep"></div>
+    <div class="toolbar-section">
+      <label class="lbl" for="ip-from">IP Inicio:</label>
+      <input type="text" id="ip-from" value="192.168.1.1" style="width:130px" placeholder="10.165.2.1">
+      <label class="lbl" for="ip-to">— Fin:</label>
+      <input type="text" id="ip-to" value="192.168.1.254" style="width:130px" placeholder="10.165.31.254">
+    </div>
+    <div class="sep"></div>
+    <div class="toolbar-section">
+      <label class="lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="chk-ports" checked> Puertos
+      </label>
+      <label class="lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="chk-hostname" checked> Hostnames
+      </label>
+    </div>
+    <div class="sep"></div>
+    <button class="btn primary" id="btn-scan" type="button">▶ Escanear</button>
+    <button class="btn danger" id="btn-stop" type="button" disabled>■ Detener</button>
+    <div class="sep"></div>
+    <button class="btn btn-icon" id="btn-export-csv" type="button" title="Exportar CSV">📄 CSV</button>
+    <button class="btn btn-icon" id="btn-export-json" type="button" title="Exportar JSON">📋 JSON</button>
+  </nav>
 
-    <!-- Table view -->
-    <div id="table-view" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
-      <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
-      <div id="table-wrap">
-        <div id="empty-state">
-          <div class="es-icon">📡</div>
-          <div class="es-text">Presiona <b>Escanear</b> para descubrir dispositivos en la red</div>
+  <main id="main">
+    <aside id="left-panel" aria-label="Estadísticas y filtros">
+      <div class="panel-header">Red detectada</div>
+      <div class="panel-body">
+        <div id="stats-cards">
+          <div class="stat-card"><div class="stat-label">Hosts online</div><div class="stat-val green" id="stat-online">0</div></div>
+          <div class="stat-card"><div class="stat-label">Escaneados</div><div class="stat-val amber" id="stat-scanned">0</div></div>
+          <div class="stat-card"><div class="stat-label">VLANs</div><div class="stat-val" id="stat-vlans">0</div></div>
         </div>
-        <table id="results-table" style="display:none">
-          <thead>
-            <tr>
-              <th onclick="sortBy('status')">Estado</th>
-              <th onclick="sortBy('ip')">Dirección IP</th>
-              <th onclick="sortBy('hostname')">Hostname</th>
-              <th onclick="sortBy('mac')">MAC Address</th>
-              <th onclick="sortBy('vendor')">Fabricante</th>
-              <th onclick="sortBy('deviceType')">Tipo</th>
-              <th>Puertos abiertos</th>
-              <th onclick="sortBy('os')">Sistema Operativo</th>
-              <th onclick="sortBy('ping')">Ping</th>
-            </tr>
-          </thead>
-          <tbody id="results-tbody"></tbody>
+        <div class="panel-header" style="padding-left:0;margin-top:8px">VLANs / Filtros</div>
+        <div class="tree-item active" data-filter="all" id="filter-all" role="button" tabindex="0">
+          <span class="tree-dot" style="background:#388bfd"></span> Todos los hosts
+          <span class="tree-badge" id="badge-all">0</span>
+        </div>
+        <div id="vlan-filter-list"></div>
+        <div class="panel-header" style="padding-left:0;margin-top:8px">Tipos</div>
+        <div id="type-filter-list"></div>
+      </div>
+    </aside>
+
+    <section id="center" aria-label="Resultados">
+      <div id="results-header">
+        <div class="results-tab active" data-view="table" role="button" tabindex="0">📋 Hosts</div>
+        <div class="results-tab" data-view="topology" role="button" tabindex="0">🗺 Topología</div>
+        <div class="results-tab" data-view="vlan" role="button" tabindex="0">🏷 VLANs</div>
+        <input id="search-box" placeholder="🔍 Buscar IP, hostname, vendor..." aria-label="Buscar hosts">
+      </div>
+
+      <div id="table-view" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+        <div id="table-wrap">
+          <div id="empty-state">
+            <div class="es-icon">📡</div>
+            <div class="es-text">Presiona Escanear para descubrir dispositivos en la red</div>
+          </div>
+          <table id="results-table" style="display:none">
+            <thead>
+              <tr>
+                <th data-sort="status">Estado</th>
+                <th data-sort="ip">Dirección IP</th>
+                <th data-sort="hostname">Hostname</th>
+                <th data-sort="mac">MAC Address</th>
+                <th data-sort="vendor">Fabricante</th>
+                <th data-sort="deviceType">Tipo</th>
+                <th>Puertos abiertos</th>
+                <th data-sort="os">Sistema Operativo</th>
+                <th>Impresoras USB</th>
+                <th data-sort="latencyMs">Ping</th>
+              </tr>
+            </thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="topo-wrap">
+        <canvas id="topo-canvas"></canvas>
+        <div class="topo-controls">
+          <button class="topo-ctrl-btn" id="topo-zoom-in" type="button" aria-label="Acercar">+</button>
+          <button class="topo-ctrl-btn" id="topo-zoom-out" type="button" aria-label="Alejar">−</button>
+          <button class="topo-ctrl-btn" id="topo-reset" type="button" aria-label="Restablecer topología">⊙</button>
+        </div>
+      </div>
+
+      <div id="vlan-wrap">
+        <div class="add-vlan-form">
+          <div class="form-field"><label for="new-vlan-id">ID VLAN</label><input type="number" id="new-vlan-id" min="1" max="4094" value="10" style="width:70px"></div>
+          <div class="form-field"><label for="new-vlan-name">Nombre</label><input type="text" id="new-vlan-name" placeholder="Marketing" style="width:120px"></div>
+          <div class="form-field"><label for="new-vlan-subnet">Subred</label><input type="text" id="new-vlan-subnet" placeholder="192.168.10.0/24" style="width:150px"></div>
+          <div class="form-field"><label for="new-vlan-color">Color</label><input type="color" id="new-vlan-color" value="#388bfd" style="width:40px;height:30px;padding:2px;border-radius:4px"></div>
+          <button class="btn primary" id="btn-add-vlan" type="button">+ Agregar VLAN</button>
+        </div>
+        <table class="vlan-table">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Subred</th><th>Hosts</th><th>Color</th><th></th></tr></thead>
+          <tbody id="vlan-tbody"></tbody>
         </table>
       </div>
-    </div>
-
-    <!-- Topology view -->
-    <div id="topo-wrap">
-      <canvas id="topo-canvas"></canvas>
-      <div class="topo-controls">
-        <div class="topo-ctrl-btn" onclick="topoZoom(1.2)">+</div>
-        <div class="topo-ctrl-btn" onclick="topoZoom(0.8)">−</div>
-        <div class="topo-ctrl-btn" onclick="topoReset()">⊙</div>
-      </div>
-    </div>
-
-    <!-- VLAN config view -->
-    <div id="vlan-wrap">
-      <div class="add-vlan-form">
-        <div class="form-field"><label>ID VLAN</label><input type="number" id="new-vlan-id" min="1" max="4094" value="10" style="width:70px"></div>
-        <div class="form-field"><label>Nombre</label><input type="text" id="new-vlan-name" placeholder="Marketing" style="width:120px"></div>
-        <div class="form-field"><label>Subred</label><input type="text" id="new-vlan-subnet" placeholder="192.168.10.0/24" style="width:150px"></div>
-        <div class="form-field"><label>Color</label><input type="color" id="new-vlan-color" value="#388bfd" style="width:40px;height:30px;padding:2px;border-radius:4px"></div>
-        <button class="btn primary" onclick="addVlan()">+ Agregar VLAN</button>
-      </div>
-      <table class="vlan-table">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Subred</th><th>Hosts</th><th>Color</th><th></th></tr></thead>
-        <tbody id="vlan-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Right panel: device details -->
-  <div id="right-panel">
-    <div class="panel-header">Detalles del dispositivo</div>
-    <div id="detail-empty">Selecciona un host para ver sus detalles</div>
-    <div id="detail-content"></div>
-  </div>
-</div>
-
-<!-- Status bar -->
-<div id="statusbar">
-  <div class="sb-item">Estado: <span class="val" id="sb-status">Listo</span></div>
-  <div class="sb-item">IP actual: <span class="val" id="sb-ip">—</span></div>
-  <div class="sb-item">Tiempo: <span class="val" id="sb-time">—</span></div>
-  <div style="margin-left:auto"></div>
-  <div class="sb-item" id="sb-iface">Interfaz: <span class="val">—</span></div>
-</div>
-
-<script>
-// ── State ──────────────────────────────────────────────────────────────────
-let hosts = [];
-let vlans = [
-  {id:1,  name:'Default',    subnet:'—',               color:'#8b949e'},
-  {id:10, name:'Management', subnet:'192.168.10.0/24', color:'#388bfd'},
-  {id:20, name:'Servidores', subnet:'10.20.0.0/24',    color:'#3fb950'},
-  {id:30, name:'Usuarios',   subnet:'172.16.30.0/24',  color:'#bc8cff'},
-  {id:40, name:'VoIP',       subnet:'10.40.0.0/24',    color:'#d29922'},
-  {id:50, name:'DMZ',        subnet:'192.168.50.0/24', color:'#f85149'},
-];
-let scanning = false;
-let stopFlag = false;
-let scanStart = 0;
-let activeFilter = 'all';
-let sortCol = 'ip', sortAsc = true;
-let selectedHost = null;
-let ifaces = [];
-let topoScale = 1, topoPanX = 0, topoPanY = 0;
-let topoNodes = [], topoDragging = null, topoHover = null;
-let scanTimer = null;
-
-const OS_ICONS = {
-  'Windows': '🪟',
-  'Linux':   '🐧',
-  'macOS':   '',
-  'Cisco':   '🔀',
-  'Embedded':'📦',
-  'Unknown': '❓',
-};
-
-function renderOs(os) {
-  if (!os || os === 'Desconocido') return '<span style="color:var(--text3);font-size:11px">—</span>';
-  const ol = os.toLowerCase();
-  let icon = '❓';
-  let color = 'var(--text2)';
-  if (ol.includes('windows')) { icon = '🪟'; color = '#0078d4'; }
-  else if (ol.includes('linux') || ol.includes('ubuntu') || ol.includes('debian') || ol.includes('centos') || ol.includes('fedora') || ol.includes('alpine') || ol.includes('proxmox')) { icon = '🐧'; color = '#f4a522'; }
-  else if (ol.includes('macos') || ol.includes('ios') || ol.includes('ipados')) { icon = ''; color = '#888'; }
-  else if (ol.includes('cisco')) { icon = '🔀'; color = '#1ba0d7'; }
-  else if (ol.includes('routeros') || ol.includes('mikrotik')) { icon = '🔀'; color = '#cc2936'; }
-  else if (ol.includes('fortios') || ol.includes('fortigate')) { icon = '🛡️'; color = '#ee2222'; }
-  else if (ol.includes('esxi') || ol.includes('vmware')) { icon = '☁️'; color = '#607d8b'; }
-  else if (ol.includes('synology') || ol.includes('qnap')) { icon = '🖧'; color = '#3fb950'; }
-  else if (ol.includes('android')) { icon = '🤖'; color = '#3ddc84'; }
-  else if (ol.includes('embedded') || ol.includes('firmware') || ol.includes('vxworks')) { icon = '📦'; color = 'var(--amber)'; }
-  else if (ol.includes('yealink') || ol.includes('grandstream') || ol.includes('polycom') || ol.includes('cisco phone') || ol.includes('sip')) { icon = '📞'; color = '#39c5cf'; }
-  else if (ol.includes('freebsd') || ol.includes('openbsd')) { icon = '😈'; color = '#ab2b28'; }
-  return `<span style="color:${color};font-size:12px">${icon} ${os}</span>`;
-}
-
-const DEVICE_ICONS = {
-  'router':'🌐','switch':'🔀','server':'🖥️','windows-server':'🪟',
-  'workstation':'💻','vm':'☁️','printer':'🖨️','voip':'📞',
-  'nvr-camera':'📹','firewall':'🛡️','ap':'📡','default':'❓'
-};
-const PORT_NAMES = {
-  21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',554:'RTSP',
-  80:'HTTP',110:'POP3',135:'RPC',139:'NetBIOS',
-  443:'HTTPS',445:'SMB',
-  3389:'RDP',5900:'VNC',8000:'Hikvision',8080:'HTTP-Alt',9100:'RAW-Print',34567:'DVR',37777:'Dahua-NVR'
-};
-const VLAN_COLORS = ['#388bfd','#3fb950','#bc8cff','#d29922','#f85149','#39c5cf','#e8739a','#79c0ff'];
-
-// ── Init ───────────────────────────────────────────────────────────────────
-window.addEventListener('load', async () => {
-  ifaces = await api.getLocalNetworks();
-  const sel = document.getElementById('iface-select');
-  sel.innerHTML = ifaces.map((n,i) =>
-    `<option value="${i}">${n.interface} — ${n.ip} (${n.cidr})</option>`
-  ).join('');
-  if (ifaces.length) onIfaceChange();
-  renderVlanTable();
-  renderVlanFilters();
-  initTopo();
-
-  // Listen for real-time scan results
-  api.onScanProgress(data => {
-    const pct = Math.round((data.scanned / data.total) * 100);
-    document.getElementById('progress-bar').style.width = pct + '%';
-    document.getElementById('sb-status').textContent = `Escaneando... ${pct}%`;
-    document.getElementById('sb-ip').textContent = data.ip;
-    document.getElementById('stat-scanned').textContent = data.scanned;
-    const elapsed = ((Date.now() - scanStart) / 1000).toFixed(0);
-    document.getElementById('sb-time').textContent = elapsed + 's';
-  });
-
-  api.onHostFound(host => {
-    hosts.push({...host, ping: Math.round(Math.random()*20+1)});
-    document.getElementById('stat-online').textContent = hosts.length;
-    document.getElementById('badge-all').textContent = hosts.length;
-    renderTable();
-    renderVlanFilters();
-    updateTopoNodes();
-  });
-});
-
-function onIfaceChange() {
-  const idx = parseInt(document.getElementById('iface-select').value) || 0;
-  const iface = ifaces[idx];
-  if (!iface) return;
-  document.getElementById('ip-from').value = iface.base + '.1';
-  document.getElementById('ip-to').value   = iface.base + '.254';
-  document.getElementById('sb-iface').innerHTML = `Interfaz: <span class="val">${iface.interface} (${iface.ip})</span>`;
-}
-
-// ── Scan ───────────────────────────────────────────────────────────────────
-// Parse "10.165.2.1" -> { a:10, b:165, c:2, d:1 }
-function parseIP(str) {
-  const p = str.trim().split('.').map(Number);
-  if (p.length !== 4 || p.some(isNaN)) return null;
-  return { a: p[0], b: p[1], c: p[2], d: p[3] };
-}
-
-// Convert IP object to 32-bit integer for comparison
-function ipToInt(ip) { return ((ip.a*256+ip.b)*256+ip.c)*256+ip.d; }
-function intToIP(n) { return `${(n>>>24)&255}.${(n>>>16)&255}.${(n>>>8)&255}.${n&255}`; }
-
-// Expand range into list of subnets {base, startHost, endHost}
-// e.g. 10.165.2.1 -> 10.165.31.254 spans subnets 10.165.2.x through 10.165.31.x
-function expandRange(fromStr, toStr) {
-  const from = parseIP(fromStr);
-  const to   = parseIP(toStr);
-  if (!from || !to) return null;
-
-  const fromInt = ipToInt(from);
-  const toInt   = ipToInt(to);
-  if (fromInt > toInt) return null;
-
-  const subnets = [];
-  // Walk subnet by subnet (Class C /24 blocks)
-  let cur = { a: from.a, b: from.b, c: from.c };
-  const lastSubnet = { a: to.a, b: to.b, c: to.c };
-
-  while (true) {
-    const isFirst = (cur.a===from.a && cur.b===from.b && cur.c===from.c);
-    const isLast  = (cur.a===to.a   && cur.b===to.b   && cur.c===to.c);
-    subnets.push({
-      base: `${cur.a}.${cur.b}.${cur.c}`,
-      startHost: isFirst ? from.d : 1,
-      endHost:   isLast  ? to.d   : 254
-    });
-    if (isLast) break;
-    // Increment third octet (move to next /24)
-    cur.c++;
-    if (cur.c > 254) { cur.c = 1; cur.b++; }
-    if (cur.b > 254) { cur.b = 0; cur.a++; }
-    if (cur.a > 254) break;
-    // Safety: max 500 subnets
-    if (subnets.length >= 500) break;
-  }
-  return subnets;
-}
-
-async function startScan() {
-  if (scanning) return;
-
-  const fromVal = document.getElementById('ip-from').value.trim();
-  const toVal   = document.getElementById('ip-to').value.trim();
-  const subnets = expandRange(fromVal, toVal);
-
-  if (!subnets) {
-    alert('Rango IP inválido.\nEjemplo válido:\nDesde: 10.165.2.1\nHasta: 10.165.31.254');
-    return;
-  }
-
-  const totalHosts = subnets.reduce((s, sn) => s + (sn.endHost - sn.startHost + 1), 0);
-  const subnetCount = subnets.length;
-
-  // Warn if huge range
-  if (totalHosts > 5000) {
-    const ok = confirm(`El rango abarca ${subnetCount} subredes y ${totalHosts.toLocaleString()} IPs.\nEsto puede tardar varios minutos.\n¿Continuar?`);
-    if (!ok) return;
-  }
-
-  scanning = true;
-  hosts = [];
-  scanStart = Date.now();
-  document.getElementById('btn-scan').disabled = true;
-  document.getElementById('btn-stop').disabled = false;
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('results-table').style.display = '';
-  document.getElementById('results-tbody').innerHTML = '';
-  document.getElementById('stat-online').textContent = '0';
-  document.getElementById('stat-scanned').textContent = '0';
-  document.getElementById('progress-bar').style.width = '0';
-  document.getElementById('sb-status').textContent = `Escaneando ${subnetCount} subred${subnetCount>1?'es':''} (${totalHosts.toLocaleString()} IPs)...`;
-
-  scanTimer = setInterval(() => {
-    document.getElementById('sb-time').textContent = ((Date.now()-scanStart)/1000).toFixed(0)+'s';
-  }, 1000);
-
-  const scanPortsFlag = document.getElementById('chk-ports').checked;
-
-  try {
-    for (let i = 0; i < subnets.length && !stopFlag; i++) {
-      const sn = subnets[i];
-      document.getElementById('sb-iface').innerHTML =
-        `Subred: <span class="val">${sn.base}.0/24 (${i+1}/${subnetCount})</span>`;
-      await api.scanNetwork({ base: sn.base, startHost: sn.startHost, endHost: sn.endHost, scanPorts: scanPortsFlag });
-    }
-  } catch(e) { console.error(e); }
-
-  clearInterval(scanTimer);
-  scanning = false;
-  stopFlag = false;
-  document.getElementById('btn-scan').disabled = false;
-  document.getElementById('btn-stop').disabled = true;
-  document.getElementById('sb-status').textContent = `Escaneo completado — ${hosts.length} hosts en ${subnetCount} subred${subnetCount>1?'es':''}`;
-  document.getElementById('progress-bar').style.width = '100%';
-  setTimeout(() => document.getElementById('progress-bar').style.width = '0', 2000);
-  updateTopoNodes();
-  drawTopo();
-}
-
-function stopScan() {
-  stopFlag = true;
-  api.removeAllListeners('scan-progress');
-  api.removeAllListeners('scan-host-found');
-  scanning = false;
-  clearInterval(scanTimer);
-  document.getElementById('btn-scan').disabled = false;
-  document.getElementById('btn-stop').disabled = true;
-  document.getElementById('sb-status').textContent = 'Detenido por el usuario';
-  // Re-register listeners for next scan
-  api.onScanProgress(data => {
-    const pct = Math.round((data.scanned / data.total) * 100);
-    document.getElementById('progress-bar').style.width = pct + '%';
-    document.getElementById('sb-status').textContent = `Escaneando... ${pct}%`;
-    document.getElementById('sb-ip').textContent = data.ip;
-    document.getElementById('stat-scanned').textContent = data.scanned;
-  });
-  api.onHostFound(host => {
-    hosts.push({...host, ping: Math.round(Math.random()*20+1)});
-    document.getElementById('stat-online').textContent = hosts.length;
-    renderTable();
-    renderVlanFilters();
-  });
-}
-
-// ── Table rendering ────────────────────────────────────────────────────────
-function getFilteredHosts() {
-  const q = document.getElementById('search-box').value.toLowerCase();
-  return hosts.filter(h => {
-    if (activeFilter !== 'all') {
-      if (activeFilter.startsWith('type:') && h.deviceType !== activeFilter.slice(5)) return false;
-      if (activeFilter.startsWith('vlan:')) {
-        const vid = parseInt(activeFilter.slice(5));
-        if (!guessVlanForHost(h).includes(vid)) return false;
-      }
-    }
-    if (q) return [h.ip,h.hostname,h.mac,h.vendor,h.deviceType].join(' ').toLowerCase().includes(q);
-    return true;
-  });
-}
-
-function guessVlanForHost(h) {
-  // Guess VLAN by IP subnet match
-  const results = [];
-  vlans.forEach(v => {
-    if (!v.subnet || v.subnet === '—') return;
-    const [net] = v.subnet.split('/');
-    const parts = net.split('.');
-    const hparts = (h.ip||'').split('.');
-    if (parts[0]===hparts[0] && parts[1]===hparts[1] && parts[2]===hparts[2]) results.push(v.id);
-  });
-  return results.length ? results : [1];
-}
-
-function renderTable() {
-  const filtered = getFilteredHosts();
-  // Sort
-  filtered.sort((a,b) => {
-    let av = a[sortCol] || '', bv = b[sortCol] || '';
-    if (sortCol === 'ip') { av = a.ip.split('.').map(n=>n.padStart(3,'0')).join(''); bv = b.ip.split('.').map(n=>n.padStart(3,'0')).join(''); }
-    if (sortCol === 'ping') { av = a.ping||999; bv = b.ping||999; }
-    return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-  });
-
-  const tbody = document.getElementById('results-tbody');
-  tbody.innerHTML = filtered.map(h => {
-    const icon = DEVICE_ICONS[h.deviceType] || DEVICE_ICONS.default;
-    const portBadges = (h.openPorts||[]).slice(0,6).map(p => {
-      const name = PORT_NAMES[p] || p;
-      let cls = '';
-      if (p===22) cls='ssh'; else if (p===3389) cls='rdp'; else if (p===80||p===443) cls='http'; else if (p===445||p===139) cls='smb';
-      return `<span class="port-badge ${cls}">${name}</span>`;
-    }).join('');
-    const vids = guessVlanForHost(h);
-    const vlanDots = vids.map(vid => {
-      const v = vlans.find(x=>x.id===vid);
-      return v ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${v.color};margin-right:3px" title="VLAN ${v.id}: ${v.name}"></span>` : '';
-    }).join('');
-    return `<tr onclick="selectHost('${h.ip}')" class="${selectedHost===h.ip?'selected':''}">
-      <td><span class="status-dot online"></span>${vlanDots}</td>
-      <td class="td-ip">${h.ip}</td>
-      <td>${h.hostname||'<span style="color:var(--text3)">—</span>'}</td>
-      <td class="td-mac">${h.mac||'<span style="color:var(--text3)">—</span>'}</td>
-      <td>${h.vendor?`<span class="vendor-badge">${h.vendor}</span>`:''}</td>
-      <td>${icon} ${h.deviceType||'—'}</td>
-      <td>${portBadges||'<span style="color:var(--text3)">ninguno</span>'}</td>
-      <td>${renderOs(h.os)}</td>
-      <td style="color:var(--green)">${h.ping||'—'}ms</td>
-    </tr>`;
-  }).join('');
-}
-
-function filterTable() { renderTable(); }
-function sortBy(col) {
-  if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
-  document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted-asc','sorted-desc'));
-  renderTable();
-}
-
-function filterBy(key) {
-  activeFilter = key;
-  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
-  if (key === 'all') document.getElementById('filter-all').classList.add('active');
-  else document.querySelector(`.tree-item[data-filter="${key}"]`)?.classList.add('active');
-  renderTable();
-}
-
-// ── Left panel ─────────────────────────────────────────────────────────────
-function renderVlanFilters() {
-  // VLAN filters
-  const vlanEl = document.getElementById('vlan-filter-list');
-  vlanEl.innerHTML = vlans.map(v => {
-    const cnt = hosts.filter(h => guessVlanForHost(h).includes(v.id)).length;
-    return `<div class="tree-item" data-filter="vlan:${v.id}" onclick="filterBy('vlan:${v.id}')">
-      <span class="tree-dot" style="background:${v.color}"></span>
-      VLAN ${v.id} — ${v.name}
-      <span class="tree-badge">${cnt}</span>
-    </div>`;
-  }).join('');
-
-  // Device type filters
-  const types = {};
-  hosts.forEach(h => { types[h.deviceType] = (types[h.deviceType]||0)+1; });
-  const typeEl = document.getElementById('type-filter-list');
-  typeEl.innerHTML = Object.entries(types).map(([t,cnt]) => `
-    <div class="tree-item" data-filter="type:${t}" onclick="filterBy('type:${t}')">
-      <span>${DEVICE_ICONS[t]||'❓'}</span> ${t}
-      <span class="tree-badge">${cnt}</span>
-    </div>`).join('');
-
-  document.getElementById('stat-vlans').textContent = vlans.length;
-  document.getElementById('badge-all').textContent = hosts.length;
-}
-
-// Per-vendor web UI port map for IP phones
-const VOIP_WEB_PORTS = {
-  'yealink':     [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'cisco-phone': [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'grandstream': [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'polycom':     [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'snom':        [{ proto:'http',  port:80,   path:'/'          }],
-  'fanvil':      [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'avaya':       [{ proto:'http',  port:80,   path:'/'          },
-                  { proto:'https', port:443,  path:'/'          }],
-  'mitel':       [{ proto:'http',  port:80,   path:'/'          }],
-  'panasonic':   [{ proto:'http',  port:80,   path:'/'          }],
-  'gigaset':     [{ proto:'http',  port:80,   path:'/'          }],
-  'alcatel':     [{ proto:'http',  port:80,   path:'/'          }],
-};
-
-// Default credentials hint per vendor
-const VOIP_DEFAULT_CREDS = {
-  'yealink':     'admin / admin',
-  'cisco-phone': 'Cisco / Cisco  ó  admin / admin',
-  'grandstream': 'admin / admin',
-  'polycom':     '456 (solo PIN)',
-  'snom':        'Sin usuario / sin contraseña (primera vez)',
-  'fanvil':      'admin / admin',
-  'avaya':       'admin / 27238 (por defecto)',
-  'mitel':       'admin / 1234',
-  'panasonic':   'admin / adminpass',
-  'gigaset':     'admin / admin',
-  'alcatel':     'admin / admin',
-};
-
-function getVoipVendorKey(vendor) {
-  const v = (vendor || '').toLowerCase();
-  for (const key of Object.keys(VOIP_WEB_PORTS)) {
-    if (v.includes(key)) return key;
-  }
-  return null;
-}
-
-function buildWebUrls(h) {
-  const ports = h.openPorts || [];
-  const vendorKey = getVoipVendorKey(h.vendor);
-
-  if (h.deviceType === 'voip' && vendorKey) {
-    // Use vendor-specific port map, filtered to actually open ports
-    const candidates = VOIP_WEB_PORTS[vendorKey];
-    const urls = candidates.filter(c => ports.includes(c.port));
-    if (urls.length) return urls.map(c => `${c.proto}://${h.ip}:${c.port}${c.path}`);
-    // Fallback: try all candidates anyway (phone might not have responded to port scan)
-    return candidates.map(c => `${c.proto}://${h.ip}:${c.port}${c.path}`);
-  }
-
-  // Generic: build from open ports
-  const urls = [];
-  if (ports.includes(443))  urls.push(`https://${h.ip}`);
-  if (ports.includes(8443)) urls.push(`https://${h.ip}:8443`);
-  if (ports.includes(80))   urls.push(`http://${h.ip}`);
-  if (ports.includes(8080)) urls.push(`http://${h.ip}:8080`);
-  if (ports.includes(8000)) urls.push(`http://${h.ip}:8000`);
-  if (!urls.length)         urls.push(`http://${h.ip}`);
-  return urls;
-}
-
-function buildActionButtons(h) {
-  const urls = buildWebUrls(h);
-  const vendorKey = getVoipVendorKey(h.vendor);
-  const creds = VOIP_DEFAULT_CREDS[vendorKey] || null;
-
-  let html = '';
-
-  // Web UI buttons — one per URL
-  if (urls.length === 1) {
-    html += `<button class="btn ping-btn" onclick="api.openExternal('${urls[0]}')">🌐 Abrir interfaz web</button>`;
-  } else {
-    html += `<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Interfaces web detectadas:</div>`;
-    urls.forEach(url => {
-      const isHttps = url.startsWith('https');
-      html += `<button class="btn ping-btn" style="margin-bottom:4px;${isHttps?'color:var(--green)':''}" onclick="api.openExternal('${url}')">${isHttps?'🔒':'🌐'} ${url}</button>`;
-    });
-  }
-
-  // Default credentials hint for VoIP phones
-  if (h.deviceType === 'voip' && creds) {
-    html += `
-    <div style="margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🔑 Credenciales por defecto</div>
-      <div style="font-size:11px;font-family:monospace;color:var(--amber)">${creds}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">Cámbielas si aún son las originales</div>
-    </div>`;
-  }
-
-  // VoIP-specific tips
-  if (h.deviceType === 'voip') {
-    html += `
-    <div style="margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">💡 Si el navegador no abre</div>
-      <div style="font-size:10px;color:var(--text2);line-height:1.6">
-        • Acepta el certificado SSL si aparece advertencia<br>
-        • Prueba con HTTP si HTTPS no carga<br>
-        • Algunos teléfonos bloquean acceso desde otras VLANs<br>
-        • Verifica que estés en la misma VLAN que el teléfono
-      </div>
-    </div>`;
-  }
-
-  // Copy IP
-  html += `<button class="btn ping-btn" style="margin-top:6px" onclick="copyToClip('${h.ip}')">📋 Copiar IP</button>`;
-
-  // RDP
-  if ((h.openPorts||[]).includes(3389)) {
-    html += `<button class="btn ping-btn" style="margin-top:6px;color:var(--purple)" onclick="api.openExternal('ms-rd:v=${h.ip}')">🖥️ Conectar RDP</button>`;
-  }
-
-  // SSH
-  if ((h.openPorts||[]).includes(22)) {
-    html += `<button class="btn ping-btn" style="margin-top:6px;color:var(--green)" onclick="copyToClip('ssh ${h.ip}')">🟢 Copiar comando SSH</button>`;
-  }
-
-  return html;
-}
-
-// ── Device details ─────────────────────────────────────────────────────────
-function selectHost(ip) {
-  selectedHost = ip;
-  const h = hosts.find(x => x.ip === ip);
-  if (!h) return;
-  document.getElementById('detail-empty').style.display = 'none';
-  const dc = document.getElementById('detail-content');
-  dc.style.display = 'block';
-  const vids = guessVlanForHost(h);
-  const vlanInfo = vids.map(vid => {
-    const v = vlans.find(x=>x.id===vid);
-    return v ? `<span style="background:${v.color}20;color:${v.color};border:1px solid ${v.color}40;border-radius:4px;padding:1px 6px;font-size:10px;margin:1px">VLAN ${v.id}: ${v.name}</span>` : '';
-  }).join(' ');
-  const ports = (h.openPorts||[]).map(p => `<span class="port-badge">${p} ${PORT_NAMES[p]||''}</span>`).join(' ');
-  dc.innerHTML = `
-    <div class="detail-icon">${DEVICE_ICONS[h.deviceType]||'❓'}</div>
-    <div class="detail-name">${h.hostname || h.ip}</div>
-    <div class="detail-ip">${h.ip}</div>
-    <div style="text-align:center;margin-bottom:8px">${vlanInfo}</div>
-    <div class="detail-section">Red</div>
-    <div class="detail-row"><span class="detail-key">IP</span><span class="detail-val">${h.ip}</span></div>
-    <div class="detail-row"><span class="detail-key">SO</span><span class="detail-val" style="color:var(--accent-light)">${h.os||'Detectando...'}</span></div>
-    <div class="detail-row"><span class="detail-key">MAC</span><span class="detail-val">${h.mac||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">Hostname</span><span class="detail-val">${h.hostname||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">Fabricante</span><span class="detail-val">${h.vendor||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">Tipo</span><span class="detail-val">${h.deviceType||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">Latencia</span><span class="detail-val" style="color:var(--green)">${h.ping||'—'}ms</span></div>
-    <div class="detail-section">Puertos abiertos</div>
-    <div style="margin-bottom:8px">${ports||'<span style="color:var(--text3);font-size:11px">Ninguno detectado</span>'}</div>
-    <div class="detail-section">Acciones rápidas</div>
-    ${buildActionButtons(h)}
-  `;
-  renderTable();
-}
-
-function copyToClip(text) {
-  navigator.clipboard.writeText(text);
-}
-
-// ── Views ──────────────────────────────────────────────────────────────────
-function switchView(name, btn) {
-  document.querySelectorAll('.results-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('table-view').style.display = name==='table' ? 'flex' : 'none';
-  document.getElementById('topo-wrap').style.display = name==='topo' ? 'block' : 'none';
-  document.getElementById('vlan-wrap').style.display = name==='vlan' ? 'block' : 'none';
-  if (name === 'topo') { setTimeout(() => { initTopo(); drawTopo(); }, 100); }
-}
-
-// ── VLANs ──────────────────────────────────────────────────────────────────
-function addVlan() {
-  const id = parseInt(document.getElementById('new-vlan-id').value);
-  const name = document.getElementById('new-vlan-name').value.trim() || `VLAN${id}`;
-  const subnet = document.getElementById('new-vlan-subnet').value.trim() || '—';
-  const color = document.getElementById('new-vlan-color').value;
-  if (!id || vlans.find(v=>v.id===id)) { alert('ID ya existe'); return; }
-  vlans.push({id, name, subnet, color});
-  renderVlanTable(); renderVlanFilters();
-}
-
-function removeVlan(id) { vlans = vlans.filter(v=>v.id!==id); renderVlanTable(); renderVlanFilters(); }
-
-function renderVlanTable() {
-  document.getElementById('vlan-tbody').innerHTML = vlans.map(v => {
-    const cnt = hosts.filter(h=>guessVlanForHost(h).includes(v.id)).length;
-    return `<tr>
-      <td>${v.id}</td>
-      <td><span class="vlan-color-dot" style="background:${v.color}"></span>${v.name}</td>
-      <td style="font-family:monospace;color:var(--accent-light)">${v.subnet}</td>
-      <td>${cnt}</td>
-      <td><input type="color" value="${v.color}" onchange="updateVlanColor(${v.id},this.value)" style="width:30px;height:22px;padding:1px;border-radius:4px;border:none;cursor:pointer"></td>
-      <td><button class="btn btn-icon" style="font-size:11px;color:var(--red)" onclick="removeVlan(${v.id})">✕</button></td>
-    </tr>`;
-  }).join('');
-}
-
-function updateVlanColor(id, color) { const v = vlans.find(x=>x.id===id); if(v) v.color=color; renderVlanFilters(); renderTable(); }
-
-// ── Topology canvas ────────────────────────────────────────────────────────
-function initTopo() {
-  const canvas = document.getElementById('topo-canvas');
-  const wrap = document.getElementById('topo-wrap');
-  if (!canvas._init) {
-    canvas._init = true;
-    canvas.addEventListener('mousedown', topoMouseDown);
-    canvas.addEventListener('mousemove', topoMouseMove);
-    canvas.addEventListener('mouseup', () => topoDragging = null);
-    canvas.addEventListener('wheel', e => { e.preventDefault(); topoZoomAt(e.offsetX, e.offsetY, e.deltaY<0?1.12:0.88); }, {passive:false});
-    new ResizeObserver(() => { canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight; drawTopo(); }).observe(wrap);
-  }
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-  updateTopoNodes();
-}
-
-function updateTopoNodes() {
-  // Arrange in circles by VLAN
-  topoNodes = hosts.map((h, i) => {
-    const existing = topoNodes.find(n=>n.ip===h.ip);
-    if (existing) return {...existing, ...h};
-    const vids = guessVlanForHost(h);
-    const vlanColor = vlans.find(v=>v.id===vids[0])?.color || '#388bfd';
-    const angle = (i / Math.max(hosts.length, 1)) * Math.PI * 2;
-    const r = 160 + Math.floor(i/8)*80;
-    return { ...h, x: Math.cos(angle)*r, y: Math.sin(angle)*r, vlanColor, radius: 20 };
-  });
-}
-
-function drawTopo() {
-  const canvas = document.getElementById('topo-canvas');
-  if (!canvas.width) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  const cx = canvas.width/2 + topoPanX, cy = canvas.height/2 + topoPanY;
-
-  // Grid
-  ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=1;
-  const gs=40*topoScale, ox=cx%gs, oy=cy%gs;
-  for(let x=ox;x<canvas.width;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}
-  for(let y=oy;y<canvas.height;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}
-
-  // VLAN zones
-  vlans.forEach(v => {
-    const members = topoNodes.filter(n=>guessVlanForHost(n).includes(v.id));
-    if (members.length < 2) return;
-    const xs = members.map(n=>cx+n.x*topoScale), ys = members.map(n=>cy+n.y*topoScale);
-    const mx=(Math.min(...xs)+Math.max(...xs))/2, my=(Math.min(...ys)+Math.max(...ys))/2;
-    const r = Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys))/2+40;
-    ctx.save(); ctx.globalAlpha=0.06;
-    ctx.fillStyle=v.color; ctx.beginPath(); ctx.ellipse(mx,my,r,r*0.7,0,0,Math.PI*2); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle=v.color+'99'; ctx.font=`${10*topoScale}px Segoe UI`; ctx.textAlign='center';
-    ctx.fillText(`VLAN ${v.id}: ${v.name}`, mx, my-r*0.65);
-  });
-
-  // Lines between nodes (star topology from gateways)
-  const gateways = topoNodes.filter(n=>n.deviceType==='router'||n.deviceType==='switch'||n.deviceType==='firewall');
-  topoNodes.forEach(node => {
-    if (gateways.includes(node)) return;
-    const gw = gateways.find(g => guessVlanForHost(g).some(vid=>guessVlanForHost(node).includes(vid))) || gateways[0];
-    if (!gw) return;
-    ctx.strokeStyle=node.vlanColor+'60'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(cx+node.x*topoScale,cy+node.y*topoScale);
-    ctx.lineTo(cx+gw.x*topoScale,cy+gw.y*topoScale); ctx.stroke(); ctx.setLineDash([]);
-  });
-
-  // Nodes
-  topoNodes.forEach(node => {
-    const nx=cx+node.x*topoScale, ny=cy+node.y*topoScale, r=node.radius*topoScale;
-    ctx.save();
-    ctx.shadowColor=node.vlanColor; ctx.shadowBlur=node===topoHover?15:6;
-    ctx.fillStyle=node.vlanColor+'cc'; ctx.beginPath(); ctx.arc(nx,ny,r,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.font=`${Math.max(10,r*0.7)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle='#fff'; ctx.fillText(DEVICE_ICONS[node.deviceType]||'❓',nx,ny);
-    if (topoScale > 0.5) {
-      ctx.font=`${Math.max(9,10*topoScale)}px Segoe UI`; ctx.fillStyle='rgba(230,237,243,0.9)';
-      ctx.textBaseline='top'; ctx.fillText(node.hostname||node.ip,nx,ny+r+3);
-    }
-    ctx.restore();
-  });
-}
-
-function topoMouseDown(e) {
-  const canvas=document.getElementById('topo-canvas');
-  const cx=canvas.width/2+topoPanX,cy=canvas.height/2+topoPanY;
-  const hit=topoNodes.find(n=>{const dx=e.offsetX-(cx+n.x*topoScale),dy=e.offsetY-(cy+n.y*topoScale);return dx*dx+dy*dy<(n.radius*topoScale)**2;});
-  if(hit){topoDragging={node:hit,ox:e.offsetX,oy:e.offsetY,nx:hit.x,ny:hit.y};}
-  else{topoDragging={pan:true,ox:e.offsetX,oy:e.offsetY,px:topoPanX,py:topoPanY};}
-}
-function topoMouseMove(e) {
-  if(!topoDragging)return;
-  if(topoDragging.pan){topoPanX=topoDragging.px+(e.offsetX-topoDragging.ox);topoPanY=topoDragging.py+(e.offsetY-topoDragging.oy);}
-  else{topoDragging.node.x=topoDragging.nx+(e.offsetX-topoDragging.ox)/topoScale;topoDragging.node.y=topoDragging.ny+(e.offsetY-topoDragging.oy)/topoScale;}
-  drawTopo();
-}
-function topoZoom(f){topoZoomAt(document.getElementById('topo-canvas').width/2,document.getElementById('topo-canvas').height/2,f);}
-function topoZoomAt(sx,sy,f){const wx=(sx-document.getElementById('topo-canvas').width/2-topoPanX)/topoScale,wy=(sy-document.getElementById('topo-canvas').height/2-topoPanY)/topoScale;topoScale=Math.max(0.2,Math.min(4,topoScale*f));topoPanX=sx-document.getElementById('topo-canvas').width/2-wx*topoScale;topoPanY=sy-document.getElementById('topo-canvas').height/2-wy*topoScale;drawTopo();}
-function topoReset(){topoScale=1;topoPanX=0;topoPanY=0;drawTopo();}
-
-// ── Export ─────────────────────────────────────────────────────────────────
-async function exportData(format) {
-  if (!hosts.length) { alert('No hay datos para exportar. Ejecuta un escaneo primero.'); return; }
-  await api.exportResults({ data: hosts, format });
-}
-</script>
+    </section>
+
+    <aside id="right-panel" aria-label="Detalles del dispositivo">
+      <div class="panel-header">Detalles del dispositivo</div>
+      <div id="detail-empty">Selecciona un host para ver sus detalles</div>
+      <div id="detail-content"></div>
+    </aside>
+  </main>
+
+  <footer id="statusbar">
+    <div class="sb-item">Estado: <span class="val" id="sb-status" aria-live="polite">Listo</span></div>
+    <div class="sb-item">IP actual: <span class="val" id="sb-ip">—</span></div>
+    <div class="sb-item">Tiempo: <span class="val" id="sb-time">—</span></div>
+    <div style="margin-left:auto"></div>
+    <div class="sb-item" id="sb-iface">Interfaz: <span class="val">—</span></div>
+  </footer>
+
+  <script src="./renderer/core/dom.js"></script>
+  <script src="./renderer/core/ip-range.js"></script>
+  <script src="./renderer/core/catalogs.js"></script>
+  <script src="./renderer/core/vlan.js"></script>
+  <script src="./renderer/core/selectors.js"></script>
+  <script src="./renderer/services/electron-adapters.js"></script>
+  <script src="./renderer/services/scan-controller.js"></script>
+  <script src="./renderer/views/filter-panel.js"></script>
+  <script src="./renderer/views/host-table.js"></script>
+  <script src="./renderer/views/detail-panel.js"></script>
+  <script src="./renderer/views/vlan-panel.js"></script>
+  <script src="./renderer/views/topology-view.js"></script>
+  <script src="./renderer/views/view-controller.js"></script>
+  <script src="./renderer/app.js"></script>
 </body>
 </html>

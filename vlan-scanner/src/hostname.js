@@ -6,14 +6,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { exec } = require('child_process');
+const { isIpv4 } = require('./domain/ip-address');
 
 const nbtstatCache = new Map();
 let dnsServersCache = null;
-
-function isIpv4(ip) {
-  if (typeof ip !== 'string' || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return false;
-  return ip.split('.').every((octet) => Number(octet) <= 255);
-}
 
 function execText(command, timeout) {
   return new Promise((resolve) => {

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/hostname.js && node --check src/hostname.test.js",
+    "check": "node scripts/check-syntax.js",
+    "verify": "npm test && npm run check",
     "build": "electron-builder --win --x64",
     "build-portable": "electron-builder --win portable"
   },

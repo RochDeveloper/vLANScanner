@@ -70,8 +70,29 @@ Los archivos compilados quedan en la carpeta `dist/`:
 |---------|-----|
 | `electron` | Framework de app de escritorio |
 | `ping` | Ping sweep multiplataforma |
-| `node-arp` | Lectura de tabla ARP |
-| `electron-builder` | Compilación a .exe instalable |
+| `electron-builder` | Compilación a instalador `.exe` |
+
+---
+
+## Arquitectura y principios SOLID
+
+La aplicación separa el bootstrap de Electron de las responsabilidades de negocio:
+
+- **SRP:** `main.js` solo compone servicios; `application/` orquesta casos de uso, `network/` contiene adaptadores, `identification/` contiene reglas y `export/` serializa resultados.
+- **OCP:** las reglas de SO/dispositivos y catálogos de presentación son colecciones de reglas; añadir un fabricante o tipo no exige reescribir el orquestador.
+- **LSP:** los servicios reciben contratos pequeños y pueden sustituirse por fakes en las pruebas; no se depende de implementaciones concretas en los casos de uso.
+- **ISP:** `preload-api.js` expone facadas separadas para red, exportación, ventana y enlaces externos, con suscripciones descartables.
+- **DIP:** `ScanController`, `NetworkAdapter`, `PlatformAdapter` y los probes reciben dependencias; los componentes de vista no conocen Electron directamente.
+
+El renderer usa módulos clásicos externos, estado local controlado y renderizado seguro con DOM/textContent. Los eventos de escaneo incluyen `runId`, progreso monotónico y un estado terminal único.
+
+### Verificación
+
+```powershell
+npm test       # pruebas unitarias y de regresión
+npm run check  # sintaxis de todos los JavaScript
+npm run verify # ambas verificaciones
+```
 
 ---
 
@@ -83,3 +104,11 @@ Los archivos compilados quedan en la carpeta `dist/`:
 | El ping no funciona | Verifica que el firewall de Windows permita ICMP |
 | App no abre | Verifica Node.js >= 18 con `node --version` |
 | Error de módulo faltante | Ejecuta `npm install` nuevamente |
+
+## Limitaciones de deteccion de impresoras USB
+- Solo hosts Windows con WMI/DCOM accesible y permisos del proceso actual.
+- Puertos 135/139/445/5985 deben estar abiertos; firewalls/AV pueden bloquear la enumeracion.
+- Hosts no Windows se marcan como no soportado.
+- Impresoras USB no compartidas pueden no aparecer.
+- Sin credenciales almacenadas; la app no gestiona secretos.
+

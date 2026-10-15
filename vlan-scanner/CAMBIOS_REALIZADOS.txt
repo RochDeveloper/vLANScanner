@@ -1,0 +1,419 @@
+DOCUMENTO DE CAMBIOS REALIZADOS
+VLAN Network Scanner
+===============================================================================
+
+Fecha del documento: 23/09/2026
+Proyecto: vlan-scanner
+Rama: main
+Último commit publicado: 1175f0b - feat: mejorar resolución de nombres y pruebas
+Estado actual: refactor SOLID y correcciones posteriores sin commit ni push
+
+
+1. OBJETIVO
+-------------------------------------------------------------------------------
+
+Se mejoró la aplicación para que getHostname muestre correctamente el nombre
+del equipo y se aplicaron los principios SOLID en el proceso principal de
+Electron y en el renderer. También se corrigieron problemas de cancelación,
+progreso, validación, seguridad y mantenimiento.
+
+
+2. CAMBIOS INICIALES DE GETHOSTNAME
+-------------------------------------------------------------------------------
+
+- Se mejoró el módulo src/hostname.js.
+- Se agregó resolución para la IP local mediante os.hostname().
+- Se agregaron estrategias de resolución:
+  - DNS inverso.
+  - Ping con nombre de host.
+  - nslookup.
+  - NetBIOS/NBTSTAT.
+  - Respuestas NBSTAT y PTR por UDP.
+- Se agregaron parsers para la salida de Windows en inglés y español.
+- Se limpian nombres inválidos, localhost, direcciones IP y sufijos DNS.
+- Se agregó caché de NBTSTAT y de servidores DNS.
+- Se centralizó la lógica en la función pública getHostname(ip).
+- Se agregó una prueba de regresión para obtener el nombre local.
+- Resultado verificado en este equipo:
+  IP:       192.168.0.25
+  Hostname: ROCHDEV
+  SO:       Windows
+  Ping:     1 ms
+
+
+3. AGENTE TESTER Y PROCESO DE QA
+-------------------------------------------------------------------------------
+
+- Se creó el agente de proyecto:
+  .opencode/agents/tester.md
+- El agente quedó especializado en QA de aplicaciones Electron.
+- Se establecieron verificaciones de:
+  - Arranque de Electron.
+  - Pruebas unitarias.
+  - Sintaxis JavaScript.
+  - Carga del preload y contextBridge.
+  - Listado de interfaces.
+  - Escaneo de la IP local.
+  - getHostname.
+  - Cancelación real.
+  - Eventos de progreso.
+  - Errores JavaScript del renderer.
+- Se detectaron y corrigieron problemas de Detener, progreso y estado del
+  renderer.
+- La validación QA posterior aprobó la aplicación con una observación menor,
+  que también fue corregida: el contador Escaneados podía quedar desfasado al
+  cancelar.
+
+
+4. SCRIPTS NPM Y VERIFICACIÓN
+-------------------------------------------------------------------------------
+
+package.json ahora incluye:
+
+- npm test
+  Ejecuta automáticamente todas las pruebas Node.js.
+
+- npm run check
+  Comprueba la sintaxis de todos los archivos JavaScript bajo src/.
+
+- npm run verify
+  Ejecuta npm test y npm run check.
+
+- Se creó el script:
+  scripts/check-syntax.js
+
+- Se agregó package-lock.json para fijar las dependencias instaladas.
+
+
+5. REFACTORIZACIÓN SOLID DEL BACKEND
+-------------------------------------------------------------------------------
+
+5.1 main.js: composition root
+------------------------------
+
+- main.js quedó reducido a composición de dependencias y ciclo de vida.
+- Se separó la construcción de la ventana.
+- Se separó el registro de handlers IPC.
+- Se separó la construcción de servicios de red, identificación y exportación.
+- Se eliminó el estado global stopScanFlag.
+
+
+5.2 src/main/
+--------------
+
+- create-main-window.js
+  Crea la ventana Electron y aplica:
+  - nodeIntegration: false
+  - contextIsolation: true
+  - webSecurity: true
+  - bloqueo de ventanas nuevas
+  - bloqueo de navegación no autorizada
+
+- register-ipc-handlers.js
+  Traduce las solicitudes IPC a los servicios de aplicación.
+  Valida el origen de los eventos y centraliza los canales.
+
+
+5.3 src/application/
+----------------------
+
+- scan-request.js
+  Valida y normaliza rangos IPv4, runId, opciones y límites.
+
+- network-scanner.js
+  Coordina los pings, el progreso y el enriquecimiento de hosts.
+
+- host-enricher.js
+  Obtiene hostname, MAC, puertos, banners, sistema operativo y tipo de
+  dispositivo.
+
+- scan-manager.js
+  Controla una única ejecución activa, runId, cancelación y estados
+  terminales.
+
+- Se añadieron pruebas de request, scanner, enricher y manager.
+
+
+5.4 src/network/
+-------------------
+
+- interface-service.js
+  Lista interfaces IPv4 y calcula el CIDR real usando la máscara.
+
+- platform/command-runner.js
+  Usa ejecución de comandos con argumentos separados, timeout y cancelación.
+
+- ping-probe.js
+  Devuelve alive, TTL y latencia real.
+
+- arp-lookup.js
+  Busca la MAC asociada a una IP.
+
+- tcp-probes.js
+  Escanea puertos y obtiene banners HTTP, SSH y SIP.
+
+- hostname-resolver.js
+  Adaptador para el resolver de nombres existente.
+
+- smb-probe.js
+  Adaptador para NetBIOS/NBTSTAT.
+
+- Se añadió soporte de AbortSignal en las operaciones cancelables.
+
+
+5.5 src/identification/
+-----------------------
+
+- oui-data.js
+  Base de datos OUI separada del código de ejecución.
+
+- vendor-identifier.js
+  Identifica fabricantes a partir del prefijo MAC.
+
+- device-classifier.js
+  Clasificación por reglas extensibles.
+
+- os-detector.js
+  Detección de sistema operativo por banners, TTL, puertos y fabricante.
+
+- Se añadieron pruebas de identificación.
+
+
+5.6 src/domain/
+------------------
+
+- ip-address.js
+  Centraliza parseo, conversión, comparación IPv4, máscaras y CIDR.
+
+- cancellation.js
+  Centraliza errores y utilidades AbortError.
+
+- Se añadieron pruebas de IPv4 y CIDR.
+
+
+5.7 src/export/ y src/security/
+-----------------------------------
+
+- result-exporter.js
+  Separa la serialización CSV/JSON de la escritura en disco.
+
+- external-url.js
+  Permite únicamente URLs http, https y ms-rd.
+
+- Se corrigió el escapado de CSV.
+- Se protegieron las exportaciones contra fórmulas CSV.
+- Se validaron los datos y formatos de exportación.
+
+
+6. REFACTORIZACIÓN SOLID DEL RENDERER
+-------------------------------------------------------------------------------
+
+6.1 HTML y CSS
+--------------
+
+- index.html quedó separado de la lógica JavaScript.
+- Se eliminaron los handlers onclick, onchange y oninput inline.
+- Se utilizaron scripts externos.
+- Se movieron los estilos a src/styles.css.
+- Se eliminó la lógica monolítica del renderer.
+- Se mantuvo la estructura y la apariencia principales de la aplicación.
+
+
+6.2 renderer/core/
+-------------------
+
+- dom.js
+  Utilidades DOM y escape de texto.
+
+- ip-range.js
+  Validación y planificación de rangos IPv4.
+
+- vlan.js
+  Servicio de VLANs, validación, CIDR y asociación de hosts.
+
+- catalogs.js
+  Catálogos de dispositivos, puertos, sistemas operativos, fabricantes y VoIP.
+
+- selectors.js
+  Filtrado, búsqueda y ordenamiento de hosts.
+
+- Se añadieron pruebas del dominio del renderer.
+
+
+6.3 renderer/services/
+-----------------------
+
+- electron-adapters.js
+  Adaptadores para red, exportación, ventana, URLs y clipboard.
+
+- scan-controller.js
+  Máquina de estados del escaneo.
+  Gestiona running, stopping, completed, cancelled y failed.
+  Ignora eventos antiguos y evita estados visuales incorrectos.
+
+- Se añadió una prueba específica del ScanController.
+
+
+6.4 renderer/views/
+---------------------
+
+- filter-panel.js
+  Filtros de VLAN y tipo con estado activo persistente.
+
+- host-table.js
+  Tabla de hosts con renderizado seguro mediante textContent y nodos DOM.
+
+- detail-panel.js
+  Detalle del dispositivo y acciones rápidas.
+
+- vlan-panel.js
+  CRUD visual de VLANs.
+
+- topology-view.js
+  Topología, zoom, arrastre y layout.
+
+- view-controller.js
+  Cambio de vistas Hosts, Topología y VLANs.
+
+
+7. CORRECCIONES FUNCIONALES
+-------------------------------------------------------------------------------
+
+- Detener ahora llama realmente al backend.
+- La cancelación utiliza AbortController y runId.
+- Se impide iniciar un segundo escaneo mientras existe uno activo.
+- Se eliminó removeAllListeners como mecanismo global del renderer.
+- Las suscripciones IPC ahora son descartables.
+- El progreso se emite por cada probe terminado.
+- Se corrigió el reinicio del progreso por cada subred.
+- El progreso no se sobrescribe después de un estado terminal.
+- Se corrigió el uso de la opción Hostnames.
+- Se eliminó la latencia aleatoria.
+- Se muestra la latencia real devuelta por ping.
+- Se muestra el nombre del equipo local.
+- Se añadió validación de octetos IPv4.
+- Se añadió un límite explícito de 65535 direcciones.
+- Se corrigieron los rangos que cruzaban octetos .0 y .255.
+- Se calcula el CIDR usando la máscara real de la interfaz.
+- Se actualizó el rango sugerido de la interfaz.
+- Se corrigió el estado vacío cuando un filtro no devuelve resultados.
+- Se actualizan tabla, filtros, topología y detalles al recibir hosts.
+- Se corrigió la pérdida de resaltado del filtro activo.
+- Se corrigieron errores de informe del escaneo completado.
+- Se corrigió el contador Escaneados durante la cancelación.
+- Se corrigió la clasificación OUI de algunos dispositivos.
+- Se corrigieron falsos positivos del banner SIP.
+- Se corrigió la coincidencia parcial de IPs en ARP (.1 frente a .10).
+- Se mejoró el manejo de errores de cancelación en getHostname.
+
+
+8. SEGURIDAD
+-------------------------------------------------------------------------------
+
+- contextBridge se mantiene como frontera entre renderer y main.
+- Se separaron las interfaces del preload.
+- Se eliminaron scripts inline.
+- Se eliminó el uso de innerHTML para datos dinámicos.
+- Se utilizan textContent y nodos DOM.
+- Se restringieron las URLs externas a protocolos permitidos.
+- Se corrigió el escapado de CSV.
+- Se corrigió la protección contra fórmulas CSV.
+- Se validan runId, rangos, formatos y opciones en los límites.
+
+
+9. ARCHIVOS PRINCIPALES MODIFICADOS O AGREGADOS
+-------------------------------------------------------------------------------
+
+Archivos modificados:
+- vlan-scanner/README.md
+- vlan-scanner/package.json
+- vlan-scanner/src/hostname.js
+- vlan-scanner/src/index.html
+- vlan-scanner/src/main.js
+- vlan-scanner/src/preload.js
+
+Directorios agregados:
+- vlan-scanner/src/application/
+- vlan-scanner/src/data/
+- vlan-scanner/src/domain/
+- vlan-scanner/src/export/
+- vlan-scanner/src/identification/
+- vlan-scanner/src/main/
+- vlan-scanner/src/network/
+- vlan-scanner/src/platform/
+- vlan-scanner/src/renderer/
+- vlan-scanner/src/security/
+- vlan-scanner/scripts/
+
+Archivos destacados agregados:
+- src/preload-api.js
+- src/styles.css
+- scripts/check-syntax.js
+- src/application/scan-manager.js
+- src/application/network-scanner.js
+- src/application/host-enricher.js
+- src/domain/ip-address.js
+- src/network/ping-probe.js
+- src/network/arp-lookup.js
+- src/network/interface-service.js
+- src/identification/device-classifier.js
+- src/identification/os-detector.js
+- src/export/result-exporter.js
+- src/renderer/app.js
+- src/renderer/services/scan-controller.js
+
+
+10. PRUEBAS Y RESULTADOS
+-------------------------------------------------------------------------------
+
+Comandos ejecutados:
+
+- npm test
+  Resultado: 26/26 pruebas correctas.
+
+- npm run check
+  Resultado: 52 archivos JavaScript con sintaxis correcta.
+
+- npm run verify
+  Ejecuta las dos verificaciones anteriores.
+
+Pruebas funcionales verificadas:
+
+- Arranque de Electron.
+- Carga de index.html.
+- Inicialización del renderer.
+- Carga de window.api.
+- Listado de interfaces.
+- Escaneo de una IP.
+- getHostname devuelve ROCHDEV para 192.168.0.25.
+- Sistema operativo Windows y latencia real.
+- Cancelación con 192.0.2.1 - 192.0.2.254.
+- Los procesos ping.exe se detienen.
+- No hay excepciones JavaScript en el renderer.
+- Las pruebas de los parsers DNS, ping, nslookup y NBTSTAT pasan.
+
+
+11. ESTADO DE GIT
+-------------------------------------------------------------------------------
+
+Último commit publicado:
+1175f0b feat: mejorar resolución de nombres y pruebas
+
+Rama:
+main
+
+Los cambios de esta refactorización SOLID todavía están sin commit y sin push.
+El working tree contiene modificaciones y archivos nuevos.
+
+
+12. PENDIENTES Y LÍMITES CONOCIDOS
+-------------------------------------------------------------------------------
+
+- Validar getHostname contra equipos remotos reales con NetBIOS y DNS
+  configurados de forma diferente.
+- Automatizar completamente el diálogo nativo de exportación.
+- Añadir pruebas E2E de todas las interacciones visuales de VLAN y topología.
+- Revisar la semántica UDP de TFTP y SIP; el escaneo actual conserva el
+  comportamiento TCP para mantener compatibilidad.
+- Los cambios SOLID actuales deben revisarse y confirmarse antes de subirlos.
+- Este documento no ejecutó un nuevo commit ni un push a GitHub.

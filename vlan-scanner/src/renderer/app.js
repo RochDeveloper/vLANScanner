@@ -90,6 +90,7 @@
       this.filterPanel = new root.VLANScanner.FilterPanel({
         vlanList: document.getElementById('vlan-filter-list'),
         typeList: document.getElementById('type-filter-list'),
+        printerList: document.getElementById('printer-filter-list'),
         allButton: document.getElementById('filter-all'),
         onlineStat: document.getElementById('stat-online'),
         vlanStat: document.getElementById('stat-vlans'),

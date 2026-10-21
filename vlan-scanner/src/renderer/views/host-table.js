@@ -104,10 +104,22 @@
         printerCell.textContent = '\u2014';
         printerCell.style.color = 'var(--text3)';
       }
+      const sharedCell = document.createElement('td');
+      const sharedPrinters = (host.printers || []).filter((p) => p.shared === true);
+      if (sharedPrinters.length > 0) {
+        const badge = createElement('span', 'shared-badge', `\ud83d\udd17 ${sharedPrinters.length}`);
+        sharedCell.append(badge);
+        sharedCell.title = sharedPrinters
+          .map((p) => `${p.name}${p.shareName ? ` (${p.shareName})` : ''}`)
+          .join(', ');
+      } else {
+        sharedCell.textContent = '\u2014';
+        sharedCell.style.color = 'var(--text3)';
+      }
       const latencyCell = createElement('td', '', host.latencyMs === null || host.latencyMs === undefined ? '\u2014' : `${host.latencyMs}ms`);
       latencyCell.style.color = 'var(--green)';
 
-      row.append(statusCell, ipCell, hostnameCell, macCell, vendorCell, typeCell, portsCell, osCell, printerCell, latencyCell);
+      row.append(statusCell, ipCell, hostnameCell, macCell, vendorCell, typeCell, portsCell, osCell, printerCell, sharedCell, latencyCell);
       return row;
     }
 

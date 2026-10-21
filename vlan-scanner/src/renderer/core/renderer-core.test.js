@@ -34,3 +34,41 @@ test('selectVisibleHosts filtra y ordena sin mutar el estado exterior', () => {
   assert.equal(visible[0].ip, '192.168.1.10');
   assert.equal(hosts[0].ip, '192.168.1.10');
 });
+
+test('selectVisibleHosts filtra por impresora compartida y USB', () => {
+  const hosts = [
+    {
+      ip: '172.16.11.177',
+      hostname: 'EB0607',
+      deviceType: 'workstation',
+      printers: [
+        { name: 'Godex RT700i', connectionType: 'USB', port: 'USB002', shared: true, shareName: 'Godex Almacen2' },
+        { name: 'Fax', connectionType: 'Local', port: 'SHRFAX:', shared: false, shareName: null }
+      ]
+    },
+    {
+      ip: '172.16.11.180',
+      hostname: 'PC-02',
+      deviceType: 'workstation',
+      printers: [{ name: 'HP LaserJet', connectionType: 'USB', port: 'USB001', shared: false, shareName: null }]
+    },
+    { ip: '172.16.11.181', hostname: 'PC-03', deviceType: 'workstation', printers: [] }
+  ];
+  const shared = selectVisibleHosts(hosts, { activeFilter: 'printers:shared', search: '', sort: { key: 'ip', ascending: true } }, idsForHost);
+  assert.deepEqual(shared.map((host) => host.ip), ['172.16.11.177']);
+  const usb = selectVisibleHosts(hosts, { activeFilter: 'printers:usb', search: '', sort: { key: 'ip', ascending: true } }, idsForHost);
+  assert.deepEqual(usb.map((host) => host.ip), ['172.16.11.177', '172.16.11.180']);
+});
+
+test('selectVisibleHosts busca por nombre de impresora compartida', () => {
+  const hosts = [{
+    ip: '172.16.11.177',
+    hostname: 'EB0607',
+    deviceType: 'workstation',
+    printers: [{ name: 'Godex RT700i', connectionType: 'USB', port: 'USB002', shared: true, shareName: 'Godex Almacen2' }]
+  }];
+  const byShare = selectVisibleHosts(hosts, { activeFilter: 'all', search: 'almacen2', sort: { key: 'ip', ascending: true } }, idsForHost);
+  assert.equal(byShare.length, 1);
+  const byPrinter = selectVisibleHosts(hosts, { activeFilter: 'all', search: 'godex', sort: { key: 'ip', ascending: true } }, idsForHost);
+  assert.equal(byPrinter.length, 1);
+});

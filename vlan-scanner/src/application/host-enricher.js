@@ -207,6 +207,7 @@ class HostEnricher {
         error: printerProbeError
       },
       usbPrinterCount: printers.filter((p) => p.connectionType === 'USB').length,
+      sharedPrinterCount: printers.filter((p) => p.shared === true).length,
       ...phoneFields
     };
   }

@@ -78,3 +78,31 @@ test('HostEnricher no rompe si el clasificador móvil falla', async () => {
   assert.equal(host.status, 'online');
   assert.deepEqual(host.phoneEvidence, ['classifier-error']);
 });
+
+test('HostEnricher cuenta las impresoras compartidas', async () => {
+  const { enricher } = createEnricher([135]);
+  enricher.printerProbe = {
+    probe: async () => ({
+      status: 'success',
+      elapsedMs: 1957,
+      error: null,
+      printers: [
+        { name: 'Microsoft XPS Document Writer', connectionType: 'Local', port: 'PORTPROMPT:', shared: false, shareName: null },
+        { name: 'Godex RT700i#1', connectionType: 'USB', port: 'USB001', shared: false, shareName: null },
+        { name: 'Godex RT700i', connectionType: 'USB', port: 'USB002', shared: true, shareName: 'Godex Almacen2' }
+      ]
+    })
+  };
+  const host = await enricher.enrich({ ip: '172.16.11.177', latencyMs: 1, ttl: 128 }, { resolveHostnames: false, scanPorts: true });
+  assert.equal(host.usbPrinterCount, 2);
+  assert.equal(host.sharedPrinterCount, 1);
+  assert.equal(host.printerProbe.status, 'success');
+  assert.equal(host.printerProbe.elapsedMs, 1957);
+});
+
+test('HostEnricher deja sharedPrinterCount en 0 cuando no hay impresoras', async () => {
+  const { enricher } = createEnricher([135]);
+  enricher.printerProbe = { probe: async () => ({ status: 'success', elapsedMs: 10, error: null, printers: [] }) };
+  const host = await enricher.enrich({ ip: '10.0.0.2', latencyMs: 1, ttl: 128 }, { resolveHostnames: false, scanPorts: true });
+  assert.equal(host.sharedPrinterCount, 0);
+});

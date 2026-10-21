@@ -2,7 +2,7 @@
 
 const { isIpv4 } = require('../domain/ip-address');
 
-const MANUFACTURER_TOKENS = ['hp', 'epson', 'brother', 'canon', 'xerox', 'ricoh', 'kyocera', 'lexmark', 'zebra', 'konica'];
+const MANUFACTURER_TOKENS = ['hp', 'epson', 'brother', 'canon', 'xerox', 'ricoh', 'kyocera', 'lexmark', 'zebra', 'konica', 'godex', 'pantum', 'oki', 'sharp'];
 
 function sanitizeError(error) {
   const raw = (error && (error.stderr || error.message || error.code))
@@ -17,15 +17,19 @@ function classifyPrinterConnection({ portName, local, network }) {
   if (!port) return (local === false) ? 'Network' : 'Local';
   if (port.includes('usb')) return 'USB';
   if (port.startsWith('ip_') || port.startsWith('wsd') || port.startsWith('\\\\') || port.includes('\\')) return 'Network';
-  if (port.startsWith('lpt') || port.startsWith('com') || port === 'file:' || port === 'nul:' || port === 'portprompt:') return 'Local';
+  if (port.startsWith('lpt') || port.startsWith('com') || port === 'file:' || port === 'nul:' || port === 'portprompt:' || port.startsWith('shrfax')) return 'Local';
   return 'Other';
 }
 
+// Acepta el codigo numerico de Win32_Printer y las cadenas de Get-Printer
+// ("Normal", "Error, PendingDeletion", "Paused", "Offline"...).
 function mapPrinterStatus(value) {
   if (value === null || value === undefined) return null;
-  const text = String(value).trim().toLowerCase();
+  const text = String(value).trim();
   if (!text) return null;
   if (text === 'true' || text === 'false') return null;
+  const lower = text.toLowerCase();
+  if (lower === 'unknown') return null;
   const numeric = Number(text);
   if (Number.isFinite(numeric)) {
     switch (numeric) {
@@ -39,7 +43,11 @@ function mapPrinterStatus(value) {
       default: return 'other';
     }
   }
-  if (['idle', 'printing', 'offline', 'error', 'other'].includes(text)) return text;
+  if (lower.includes('printing')) return 'printing';
+  if (lower.includes('error') || lower.includes('paper jam') || lower.includes('paperout') || lower.includes('no paper')) return 'error';
+  if (lower.includes('paused') || lower.includes('offline')) return 'offline';
+  if (lower.includes('normal') || lower.includes('idle')) return 'idle';
+  if (['idle', 'printing', 'offline', 'error', 'other'].includes(lower)) return lower;
   return 'other';
 }
 
@@ -79,6 +87,8 @@ function buildPrinterInfo(raw, source) {
     manufacturer: deriveManufacturer(name, raw.DriverName),
     status: mapPrinterStatus(raw.PrinterStatus),
     shared: parseBool(raw.Shared),
+    shareName: normalizeField(raw.ShareName),
+    published: parseBool(raw.Published),
     source
   };
 }
@@ -95,7 +105,9 @@ function dedupePrinters(printers) {
   return result;
 }
 
-function parsePowerShellPrinters(stdout) {
+// Extrae un array de objetos del stdout de PowerShell (JSON puro o JSON envuelto
+// en texto de advertencia).
+function parseJsonPayload(stdout) {
   let text = String(stdout || '').replace(/^\uFEFF/, '').trim();
   if (!text || text === '[]') return [];
   let parsed;
@@ -103,16 +115,16 @@ function parsePowerShellPrinters(stdout) {
     parsed = JSON.parse(text);
   } catch (_) {
     const match = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-    if (match) {
-      try { parsed = JSON.parse(match[1]); } catch (__) { return []; }
-    } else {
-      return [];
-    }
+    if (!match) return [];
+    try { parsed = JSON.parse(match[1]); } catch (__) { return []; }
   }
   if (!Array.isArray(parsed)) parsed = [parsed];
+  return parsed.filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+}
+
+function parsePowerShellPrinters(stdout) {
   const printers = [];
-  for (const item of parsed) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+  for (const item of parseJsonPayload(stdout)) {
     const printer = buildPrinterInfo({
       Name: item.Name,
       PortName: item.PortName,
@@ -120,8 +132,32 @@ function parsePowerShellPrinters(stdout) {
       Local: item.Local,
       Network: item.Network,
       Shared: item.Shared,
+      ShareName: item.ShareName,
+      Published: item.Published,
       PrinterStatus: item.PrinterStatus
     }, 'win32_printer');
+    if (printer) printers.push(printer);
+  }
+  return dedupePrinters(printers);
+}
+
+// Get-Printer expone Type ('Local' | 'Connect') en lugar de Local/Network.
+function parseGetPrinterPrinters(stdout) {
+  const printers = [];
+  for (const item of parseJsonPayload(stdout)) {
+    const type = normalizeField(item.Type);
+    const isConnect = String(type || '').toLowerCase() === 'connect';
+    const printer = buildPrinterInfo({
+      Name: item.Name,
+      PortName: item.PortName,
+      DriverName: item.DriverName,
+      Local: type ? (isConnect ? 'FALSE' : 'TRUE') : undefined,
+      Network: type ? (isConnect ? 'TRUE' : 'FALSE') : undefined,
+      Shared: item.Shared,
+      ShareName: item.ShareName,
+      Published: item.Published,
+      PrinterStatus: item.PrinterStatus
+    }, 'get_printer');
     if (printer) printers.push(printer);
   }
   return dedupePrinters(printers);
@@ -165,6 +201,7 @@ function parseWmicCsv(stdout) {
   const localIndex = indexOf('Local');
   const networkIndex = indexOf('Network');
   const sharedIndex = indexOf('Shared');
+  const shareNameIndex = indexOf('ShareName');
   const statusIndex = indexOf('PrinterStatus');
 
   const printers = [];
@@ -177,6 +214,7 @@ function parseWmicCsv(stdout) {
       Local: localIndex >= 0 ? fields[localIndex] : '',
       Network: networkIndex >= 0 ? fields[networkIndex] : '',
       Shared: sharedIndex >= 0 ? fields[sharedIndex] : '',
+      ShareName: shareNameIndex >= 0 ? fields[shareNameIndex] : '',
       PrinterStatus: statusIndex >= 0 ? fields[statusIndex] : ''
     };
     const printer = buildPrinterInfo(raw, 'wmic_csv');
@@ -208,13 +246,69 @@ class PrinterProbe {
     this.wmicPath = wmicPath;
   }
 
+  _buildGetPrinterScript(ip) {
+    return [
+      "$ErrorActionPreference='Stop';",
+      `$items = @(Get-Printer -ComputerName '${ip}' -ErrorAction Stop | ForEach-Object {`,
+      '  [PSCustomObject]@{',
+      '    Name = $_.Name;',
+      '    PortName = $_.PortName;',
+      '    DriverName = $_.DriverName;',
+      '    Shared = [bool]$_.Shared;',
+      '    ShareName = $_.ShareName;',
+      '    Published = [bool]$_.Published;',
+      '    PrinterStatus = [string]$_.PrinterStatus;',
+      '    Type = [string]$_.Type',
+      '  }',
+      '});',
+      "if ($items.Count -eq 0) { '[]' } else { $items | ConvertTo-Json -Compress -Depth 2 }"
+    ].join(' ');
+  }
+
   _buildPrimaryScript(ip) {
     return [
       "$ErrorActionPreference='Stop';",
       `$items = @(Get-CimInstance -ComputerName '${ip}' -ClassName Win32_Printer -ErrorAction Stop |`,
-      '  Select-Object Name, PortName, DriverName, Local, Network, Shared, PrinterStatus, Location);',
+      '  Select-Object Name, PortName, DriverName, Local, Network, Shared, ShareName, PrinterStatus, Location);',
       "if ($items.Count -eq 0) { '[]' } else { $items | ConvertTo-Json -Compress -Depth 2 }"
     ].join(' ');
+  }
+
+  // Get-Printer habla con el spooler por RPC y funciona en redes sin WinRM
+  // configurado; Win32_Printer (CIM) requiere TrustedHosts y wmic ya no existe
+  // en Windows 11 24H2+, asi que se prueban en orden hasta que una responda.
+  _strategies(ip) {
+    const runOptions = { timeout: this.timeout, windowsHide: true };
+    const strategies = [
+      {
+        name: 'get_printer',
+        parse: parseGetPrinterPrinters,
+        run: (signal) => this.commandRunner.run(this.powershellPath, [
+          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', this._buildGetPrinterScript(ip)
+        ], { ...runOptions, signal })
+      },
+      {
+        name: 'win32_printer',
+        parse: parsePowerShellPrinters,
+        run: (signal) => this.commandRunner.run(this.powershellPath, [
+          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', this._buildPrimaryScript(ip)
+        ], { ...runOptions, signal })
+      }
+    ];
+    if (this.enableWmicFallback) {
+      strategies.push({
+        name: 'wmic_csv',
+        parse: parseWmicCsv,
+        run: (signal) => this.commandRunner.run(this.wmicPath, [
+          `/node:"${ip}"`,
+          'printer',
+          'get',
+          'Name,PortName,DriverName,Local,Network,Shared,ShareName,PrinterStatus',
+          '/format:csv'
+        ], { ...runOptions, signal })
+      });
+    }
+    return strategies;
   }
 
   _isTimeout(error, elapsedMs) {
@@ -223,6 +317,11 @@ class PrinterProbe {
 
   _isCancelled(error) {
     return !!error && (error.name === 'AbortError' || error.code === 'ABORT_ERR' || error.message === 'Operación cancelada');
+  }
+
+  _isUnavailable(error) {
+    const text = String((error && (error.code || error.message)) || '');
+    return error?.code === 'ENOENT' || /not recognized|not found|no se reconoce|enoent/i.test(text);
   }
 
   async probe(ip, { signal, osHint } = {}) {
@@ -238,69 +337,46 @@ class PrinterProbe {
     }
 
     const elapsed = () => Math.max(0, Date.now() - startedAt);
+    const failures = [];
+    let emptyResult = false;
 
-    try {
-      const script = this._buildPrimaryScript(ip);
-      const runResult = await this.commandRunner.run(this.powershellPath, [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script
-      ], { timeout: this.timeout, signal, windowsHide: true });
-
-      const rawStdout = (runResult && runResult.stdout) ? runResult.stdout : '';
-      const stdout = rawStdout.length > this.maxStdoutBytes ? rawStdout.slice(0, this.maxStdoutBytes) : rawStdout;
-      const printers = parsePowerShellPrinters(stdout).slice(0, this.maxPrinters);
-      return { status: 'success', printers, elapsedMs: elapsed(), error: null };
-    } catch (primaryError) {
-      if (this._isCancelled(primaryError) || signal?.aborted) {
-        return { status: 'cancelled', printers: [], elapsedMs: elapsed(), error: { code: 'CANCELLED', message: 'Operación cancelada' } };
-      }
-      if (this._isTimeout(primaryError, elapsed())) {
-        return { status: 'timeout', printers: [], elapsedMs: elapsed(), error: { code: 'TIMEOUT', message: sanitizeError(primaryError) } };
-      }
-
-      if (this.enableWmicFallback) {
-        try {
-          const fallbackRun = await this.commandRunner.run(this.wmicPath, [
-            `/node:"${ip}"`,
-            'printer',
-            'get',
-            'Name,PortName,DriverName,Local,Network,Shared,PrinterStatus',
-            '/format:csv'
-          ], { timeout: this.timeout, signal, windowsHide: true });
-          const rawStdout = (fallbackRun && fallbackRun.stdout) ? fallbackRun.stdout : '';
-          const stdout = rawStdout.length > this.maxStdoutBytes ? rawStdout.slice(0, this.maxStdoutBytes) : rawStdout;
-          const printers = parseWmicCsv(stdout).slice(0, this.maxPrinters);
+    for (const strategy of this._strategies(ip)) {
+      try {
+        const runResult = await strategy.run(signal);
+        const rawStdout = (runResult && runResult.stdout) ? runResult.stdout : '';
+        const stdout = rawStdout.length > this.maxStdoutBytes ? rawStdout.slice(0, this.maxStdoutBytes) : rawStdout;
+        const printers = strategy.parse(stdout).slice(0, this.maxPrinters);
+        if (printers.length > 0) {
           return { status: 'success', printers, elapsedMs: elapsed(), error: null };
-        } catch (fallbackError) {
-          if (this._isCancelled(fallbackError) || signal?.aborted) {
-            return { status: 'cancelled', printers: [], elapsedMs: elapsed(), error: { code: 'CANCELLED', message: 'Operación cancelada' } };
-          }
-          if (this._isTimeout(fallbackError, elapsed())) {
-            return { status: 'timeout', printers: [], elapsedMs: elapsed(), error: { code: 'TIMEOUT', message: sanitizeError(fallbackError) } };
-          }
-          const unavailable = !fallbackError || fallbackError.code === 'ENOENT'
-            || /not found|enoent/i.test(String(fallbackError.code || fallbackError.message || ''));
-          return {
-            status: 'failed',
-            printers: [],
-            elapsedMs: elapsed(),
-            error: {
-              code: unavailable ? 'PRIMARY_AND_FALLBACK_UNAVAILABLE' : 'COMMAND_FAILED',
-              message: sanitizeError(primaryError)
-            }
-          };
         }
+        // Respuesta vacia es inconcluyente: el spooler pudo estar bloqueado.
+        emptyResult = true;
+        failures.push({ strategy: strategy.name, message: 'sin impresoras reportadas' });
+      } catch (error) {
+        if (this._isCancelled(error) || signal?.aborted) {
+          return { status: 'cancelled', printers: [], elapsedMs: elapsed(), error: { code: 'CANCELLED', message: 'Operación cancelada' } };
+        }
+        if (this._isTimeout(error, elapsed())) {
+          return { status: 'timeout', printers: [], elapsedMs: elapsed(), error: { code: 'TIMEOUT', message: sanitizeError(error) } };
+        }
+        failures.push({ strategy: strategy.name, message: sanitizeError(error) });
       }
-
-      return {
-        status: 'failed',
-        printers: [],
-        elapsedMs: elapsed(),
-        error: {
-          code: (primaryError && primaryError.code) ? String(primaryError.code) : 'COMMAND_FAILED',
-          message: sanitizeError(primaryError)
-        }
-      };
     }
+
+    if (emptyResult) {
+      return { status: 'success', printers: [], elapsedMs: elapsed(), error: null };
+    }
+
+    const unavailable = failures.length > 0 && failures.every((failure) => this._isUnavailable({ message: failure.message }));
+    return {
+      status: 'failed',
+      printers: [],
+      elapsedMs: elapsed(),
+      error: {
+        code: unavailable ? 'PRINTER_QUERY_UNAVAILABLE' : 'PRINTER_QUERY_FAILED',
+        message: failures.map((failure) => `${failure.strategy}: ${failure.message}`).join(' | ').slice(0, 400)
+      }
+    };
   }
 }
 
@@ -310,5 +386,6 @@ module.exports = {
   mapPrinterStatus,
   deriveManufacturer,
   parsePowerShellPrinters,
+  parseGetPrinterPrinters,
   parseWmicCsv
 };

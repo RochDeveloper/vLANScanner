@@ -6,9 +6,10 @@
   const { createElement, clear } = globalThis.VLANScanner;
 
   class FilterPanel {
-    constructor({ vlanList, typeList, allButton, onlineStat, vlanStat, badge, onFilter, idsForHost, deviceIcons }) {
+    constructor({ vlanList, typeList, printerList, allButton, onlineStat, vlanStat, badge, onFilter, idsForHost, deviceIcons }) {
       this.vlanList = vlanList;
       this.typeList = typeList;
+      this.printerList = printerList || null;
       this.allButton = allButton;
       this.onlineStat = onlineStat;
       this.vlanStat = vlanStat;
@@ -22,12 +23,14 @@
       };
       this.vlanList.addEventListener('click', this.handleClick);
       this.typeList.addEventListener('click', this.handleClick);
+      if (this.printerList) this.printerList.addEventListener('click', this.handleClick);
       this.allButton.addEventListener('click', this.handleClick);
     }
 
     render(hosts, vlans, activeFilter) {
       clear(this.vlanList);
       clear(this.typeList);
+      if (this.printerList) clear(this.printerList);
       const vlanCounts = new Map(vlans.map((vlan) => [vlan.id, 0]));
       for (const host of hosts) {
         for (const id of this.idsForHost(host)) vlanCounts.set(id, (vlanCounts.get(id) || 0) + 1);
@@ -49,6 +52,18 @@
       for (const [type, count] of [...typeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
         const item = this.createItem(`type:${type}`, `${this.deviceIcons[type] || '❓'} ${type}`, count);
         this.typeList.append(item);
+      }
+
+      if (this.printerList) {
+        let sharedHosts = 0;
+        let usbHosts = 0;
+        for (const host of hosts) {
+          const printers = host.printers || [];
+          if (printers.some((printer) => printer.shared === true)) sharedHosts += 1;
+          if (printers.some((printer) => printer.connectionType === 'USB')) usbHosts += 1;
+        }
+        this.printerList.append(this.createItem('printers:shared', '🔗 Con impresora compartida', sharedHosts));
+        this.printerList.append(this.createItem('printers:usb', '🖨️ Con impresora USB', usbHosts));
       }
 
       this.onlineStat.textContent = String(hosts.length);
@@ -76,6 +91,7 @@
     destroy() {
       this.vlanList.removeEventListener('click', this.handleClick);
       this.typeList.removeEventListener('click', this.handleClick);
+      if (this.printerList) this.printerList.removeEventListener('click', this.handleClick);
       this.allButton.removeEventListener('click', this.handleClick);
     }
   }

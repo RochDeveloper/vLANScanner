@@ -13,6 +13,7 @@ const CSV_COLUMNS = [
   ['openPorts', 'Open Ports'],
   ['latencyMs', 'Ping'],
   ['usbPrinterCount', 'USB Printers'],
+  ['sharedPrinterCount', 'Shared Printers'],
   ['printerProbeStatus', 'Printer Probe'],
   ['printers', 'Printers'],
   ['phoneOS', 'Phone OS'],
@@ -37,7 +38,11 @@ function serializeResults(data, format) {
     if (key === 'openPorts') return csvCell((host.openPorts || []).join(','));
     if (key === 'printers') {
       const text = (host.printers || [])
-        .map((printer) => `${printer.name || 'Desconocida'} [${printer.connectionType}${printer.port ? ` / ${printer.port}` : ''}]`)
+        .map((printer) => {
+          const details = `${printer.name || 'Desconocida'} [${printer.connectionType}${printer.port ? ` / ${printer.port}` : ''}]`;
+          if (printer.shared !== true) return details;
+          return `${details} COMPARTIDA${printer.shareName ? ` (${printer.shareName})` : ''}`;
+        })
         .join('; ');
       return csvCell(text);
     }

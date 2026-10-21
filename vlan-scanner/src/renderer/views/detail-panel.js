@@ -79,10 +79,12 @@
 
        this.content.append(createElement('div', 'detail-section', 'Impresoras (remoto)'));
       const probeStatus = host.printerProbe?.status || 'skipped';
+      const allPrinters = host.printers || [];
+      const sharedPrinters = allPrinters.filter((p) => p.shared === true);
+      const usbCount = allPrinters.filter((p) => p.connectionType === 'USB').length;
       let printerSummary = '';
       if (probeStatus === 'success') {
-        const usbCount = (host.printers || []).filter((p) => p.connectionType === 'USB').length;
-        printerSummary = `Detectadas: ${(host.printers || []).length} (USB: ${usbCount})`;
+        printerSummary = `Detectadas: ${allPrinters.length} (USB: ${usbCount}, compartidas: ${sharedPrinters.length})`;
       } else if (probeStatus === 'unsupported') {
         printerSummary = 'No aplicable (SO no Windows o host no Windows)';
       } else if (probeStatus === 'skipped') {
@@ -92,15 +94,43 @@
         printerSummary = `No disponible: ${msg}`;
       }
       this.content.append(createElement('div', '', printerSummary));
+
+      if (sharedPrinters.length > 0) {
+        const sharedBox = createElement('div', 'shared-box');
+        const sharedTitle = createElement('div', '', `\ud83d\udd17 ${sharedPrinters.length} impresora(s) compartida(s)`);
+        sharedTitle.style.fontWeight = '600';
+        sharedBox.append(sharedTitle);
+        for (const printer of sharedPrinters) {
+          const line = createElement('div', '', `${printer.name} \u2014 ${printer.connectionType}${printer.port ? ` (${printer.port})` : ''}`);
+          line.style.fontSize = '11px';
+          sharedBox.append(line);
+          if (printer.shareName) {
+            const share = createElement('div', '', `recurso compartido: \\\\${printer.shareName}`);
+            share.style.fontSize = '10px';
+            share.style.fontFamily = 'monospace';
+            share.style.color = 'var(--text3)';
+            sharedBox.append(share);
+          }
+        }
+        this.content.append(sharedBox);
+      }
+
       if (probeStatus === 'success') {
-        if ((host.printers || []).length === 0) {
+        if (allPrinters.length === 0) {
           const emptyPrinters = createElement('span', '', 'Sin impresoras reportadas');
           emptyPrinters.style.fontSize = '11px';
           this.content.append(emptyPrinters);
         } else {
-          for (const printer of (host.printers || [])) {
-            const line = createElement('div', '', `\ud83d\udda8\ufe0f ${printer.name} \u2014 ${printer.connectionType}${printer.port ? ` (${printer.port})` : ''}`);
+          for (const printer of allPrinters) {
+            const isShared = printer.shared === true;
+            const line = createElement('div', '', `${isShared ? '\ud83d\udd17' : '\ud83d\udda8\ufe0f'} ${printer.name} \u2014 ${printer.connectionType}${printer.port ? ` (${printer.port})` : ''}`);
             line.style.fontSize = '11px';
+            if (isShared) {
+              line.style.color = 'var(--amber)';
+              const badge = createElement('span', 'shared-badge', 'COMPARTIDA');
+              badge.style.marginLeft = '4px';
+              line.append(badge);
+            }
             this.content.append(line);
           }
         }

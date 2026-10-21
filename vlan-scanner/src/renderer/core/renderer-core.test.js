@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('./ip-range');
 const { createRangePlan } = require('./ip-range');
+const { rangeIsPending } = require('./ip-range');
 const { VlanService, validateVlan } = require('./vlan');
 const { selectVisibleHosts } = require('./selectors');
 
@@ -13,6 +14,16 @@ test('createRangePlan valida límites y tamaño', () => {
   assert.equal(createRangePlan('192.168.1.250', '192.168.2.2').total, 9);
   assert.throws(() => createRangePlan('192.168.1.256', '192.168.1.1'), /IPv4/);
   assert.throws(() => createRangePlan('10.0.0.2', '10.0.0.1'), /anterior/);
+});
+
+test('rangeIsPending detecta cuando el rango editado difiere del escaneado', () => {
+  const running = { from: '172.16.11.176', to: '172.16.11.179' };
+  assert.equal(rangeIsPending({ from: '172.16.11.176', to: '172.16.11.179' }, running), false);
+  assert.equal(rangeIsPending({ from: ' 172.16.11.176 ', to: '172.16.11.179' }, running), false);
+  assert.equal(rangeIsPending({ from: '172.16.11.176', to: '172.16.11.254' }, running), true);
+  assert.equal(rangeIsPending({ from: '172.16.13.1', to: '172.16.13.254' }, running), true);
+  assert.equal(rangeIsPending({ from: '', to: '' }, running), false);
+  assert.equal(rangeIsPending({ from: '1.1.1.1', to: '1.1.1.2' }, null), false);
 });
 
 test('VlanService valida VLAN y respeta CIDR', () => {

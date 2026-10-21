@@ -33,5 +33,15 @@
     return { fromIp, toIp, from, to, total };
   }
 
-  return { MAX_SCAN_ADDRESSES, parseIPv4, toNumber, fromNumber, createRangePlan };
+  // Indica si el rango que muestra el usuario difiere del que se esta
+  // escaneando: el nuevo se aplicara en el proximo escaneo.
+  function rangeIsPending(current, running) {
+    if (!current || !running) return false;
+    const from = String(current.from ?? '').trim();
+    const to = String(current.to ?? '').trim();
+    if (!from && !to) return false;
+    return from !== String(running.from ?? '').trim() || to !== String(running.to ?? '').trim();
+  }
+
+  return { MAX_SCAN_ADDRESSES, parseIPv4, toNumber, fromNumber, createRangePlan, rangeIsPending };
 });

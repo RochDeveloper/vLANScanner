@@ -39,6 +39,10 @@ button:disabled, input:disabled, select:disabled { opacity: 0.55; cursor: not-al
 label.lbl { font-size: 11px; color: var(--text2); white-space: nowrap; }
 select, input[type=text], input[type=number] { background: var(--bg2); border: 1px solid var(--border); color: var(--text1); border-radius: var(--radius); padding: 4px 8px; font-size: 12px; outline: none; }
 select:focus, input:focus { border-color: var(--accent); }
+input[type=text].pending { border-color: var(--amber); color: var(--amber); }
+input[type=text].pending:focus { border-color: var(--amber); }
+.range-hint { color: var(--amber); font-size: 11px; white-space: nowrap; }
+.range-hint[hidden] { display: none; }
 input[type=number] { width: 56px; }
 .btn { padding: 5px 14px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text1); font-size: 12px; cursor: pointer; transition: all .15s; white-space: nowrap; }
 .btn:hover { background: var(--bg4); border-color: var(--accent); }

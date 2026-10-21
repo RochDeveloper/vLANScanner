@@ -1,6 +1,7 @@
 (function bootstrap(root) {
   const {
     createRangePlan,
+    rangeIsPending,
     VlanService,
     DEVICE_ICONS,
     NetworkAdapter,
@@ -23,6 +24,8 @@
       this.hosts = [];
       this.interfaces = [];
       this.hasScanned = false;
+      this.scanning = false;
+      this.runningRange = null;
       this.renderFrame = null;
       this.ui = {
         activeFilter: 'all',
@@ -55,6 +58,7 @@
         ifaceSelect: byId('iface-select'),
         ipFrom: byId('ip-from'),
         ipTo: byId('ip-to'),
+        rangeHint: byId('range-hint'),
         scanPorts: byId('chk-ports'),
         resolveHostnames: byId('chk-hostname'),
         scan: byId('btn-scan'),
@@ -146,6 +150,8 @@
       this.elements.exportCsv.addEventListener('click', () => this.exportResults('csv'));
       this.elements.exportJson.addEventListener('click', () => this.exportResults('json'));
       this.elements.ifaceSelect.addEventListener('change', () => this.onInterfaceChange());
+      this.elements.ipFrom.addEventListener('input', () => this.updateRangeHint());
+      this.elements.ipTo.addEventListener('input', () => this.updateRangeHint());
       this.elements.search.addEventListener('input', () => {
         this.ui.search = this.elements.search.value;
         this.scheduleRender();
@@ -186,6 +192,7 @@
       if (!interfaceItem) return;
       this.elements.ipFrom.value = interfaceItem.suggestedFrom || `${interfaceItem.base}.1`;
       this.elements.ipTo.value = interfaceItem.suggestedTo || `${interfaceItem.base}.254`;
+      this.updateRangeHint();
       this.elements.sbIface.replaceChildren(
         document.createTextNode('Interfaz: '),
         Object.assign(document.createElement('span'), { className: 'val', textContent: `${interfaceItem.interface} (${interfaceItem.ip})` })
@@ -201,13 +208,19 @@
         alert(`Rango IP inválido.\n${error.message}`);
         return;
       }
-      if (plan.total > 5000 && !confirm(`El rango abarca ${plan.total.toLocaleString('es-ES')} direcciones.\nEsto puede tardar varios minutos.\n¿Continuar?`)) return;
+      if (plan.total > 5000 && !confirm(
+        `El rango ${plan.fromIp} - ${plan.toIp} abarca ${plan.total.toLocaleString('es-ES')} direcciones.\n`
+        + 'El escaneo puede tardar una hora o mas.\n'
+        + 'Puedes reducir el rango a la subred local (por ejemplo un /24) antes de continuar.\n'
+        + '¿Continuar de todos modos?'
+      )) return;
 
       this.hosts = [];
       this.hasScanned = true;
       this.ui.selectedIp = null;
       this.ui.activeFilter = 'all';
       this.ui.search = '';
+      this.runningRange = { from: plan.fromIp, to: plan.toIp };
       this.elements.search.value = '';
       this.elements.statScanned.textContent = '0';
       this.elements.progress.style.width = '0%';
@@ -244,13 +257,30 @@
     }
 
     setScanningControls(scanning) {
+      this.scanning = scanning;
       this.elements.scan.disabled = scanning;
       this.elements.stop.disabled = !scanning;
       this.elements.ifaceSelect.disabled = scanning;
-      this.elements.ipFrom.disabled = scanning;
-      this.elements.ipTo.disabled = scanning;
       this.elements.scanPorts.disabled = scanning;
       this.elements.resolveHostnames.disabled = scanning;
+      // El rango se lee al iniciar el escaneo: los campos quedan editables
+      // durante la ejecucion para poder corregir la sintaxis sin detenerla.
+      this.updateRangeHint();
+    }
+
+    updateRangeHint() {
+      const pending = Boolean(this.scanning) && rangeIsPending(
+        { from: this.elements.ipFrom.value, to: this.elements.ipTo.value },
+        this.runningRange
+      );
+      for (const input of [this.elements.ipFrom, this.elements.ipTo]) {
+        input.classList.toggle('pending', pending);
+        input.title = pending
+          ? 'Rango pendiente: se aplicara en el proximo escaneo'
+          : 'Rango de direcciones a escanear';
+      }
+      if (this.elements.rangeHint) this.elements.rangeHint.hidden = !pending;
+      return pending;
     }
 
     handleScanStatus(status) {
@@ -259,7 +289,9 @@
         this.elements.statScanned.textContent = String(status.progress.scanned);
       }
       if (status.status === 'running') {
-        this.setStatus(`Escaneando ${status.progress.total.toLocaleString('es-ES')} direcciones...`);
+        const range = this.runningRange ? `${this.runningRange.from} - ${this.runningRange.to}` : '';
+        const total = status.progress.total.toLocaleString('es-ES');
+        this.setStatus(range ? `Escaneando ${range} (${total} direcciones)...` : `Escaneando ${total} direcciones...`);
       } else if (status.status === 'stopping') {
         this.setStatus('Deteniendo el escaneo...');
       } else if (status.status === 'completed') {

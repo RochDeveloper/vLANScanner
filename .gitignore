@@ -1,8 +1,35 @@
-﻿node_modules/
+﻿# Dependencias
+node_modules/
 **/node_modules/
+
+# Builds
 dist/
 **/dist/
 build/
 **/build/
+out/
+**/out/
+.vite/
+**/.vite/
+
+# Cache de npm (no debe versionarse)
+.npm-cache/
+**/.npm-cache/
+
+# Artefactos de empaquetado
+node-portable.zip
+*.exe
+
+# Entorno y secretos
 .env
+.env.*
+!.env.example
+
+# Editores
 .vscode/
+
+# Sistema operativo y logs
+Thumbs.db
+Desktop.ini
+*.log
+npm-debug.log*

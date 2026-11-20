@@ -2,6 +2,7 @@
 
 const { randomUUID } = require('crypto');
 const { compareIPv4, ipv4ToNumber, isIpv4 } = require('../domain/ip-address');
+const { normalizeScanCategory, getScanCategory } = require('../shared/scan-categories');
 
 const MAX_SCAN_ADDRESSES = 65535;
 
@@ -23,6 +24,9 @@ function createScanPlan(request = {}, { maxAddresses = MAX_SCAN_ADDRESSES } = {}
   const total = toNumber - fromNumber + 1;
   if (total > maxAddresses) throw new Error(`El rango supera el máximo de ${maxAddresses.toLocaleString('es-ES')} direcciones`);
 
+  const category = normalizeScanCategory(request.category);
+  const categoryInfo = getScanCategory(category);
+
   return {
     runId: normalizeRunId(request.runId),
     fromIp,
@@ -30,9 +34,17 @@ function createScanPlan(request = {}, { maxAddresses = MAX_SCAN_ADDRESSES } = {}
     fromNumber,
     toNumber,
     total,
-    scanPorts: request.scanPorts !== false,
+    category,
+    categoryLabel: categoryInfo.shortLabel,
+    // Identificar una categoría concreta exige escanear puertos; sin ellos la
+    // clasificación cae en el valor por defecto y el filtro no tendría sentido.
+    scanPorts: category === 'all' ? request.scanPorts !== false : true,
     resolveHostnames: request.resolveHostnames !== false,
+    // El sondeo remoto de impresoras aporta datos en los escaneos que pueden
+    // incluir equipos Windows que comparten sus impresoras: workstations (la
+    // columna «Impresora compartida»), impresoras y el escaneo completo.
     probePrinters: request.probePrinters !== false
+      && (category === 'all' || category === 'printer' || category === 'workstation')
   };
 }
 

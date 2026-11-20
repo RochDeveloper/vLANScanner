@@ -24,3 +24,35 @@ test('createScanPlan rechaza rangos y payloads inválidos', () => {
   assert.throws(() => createScanPlan({ fromIp: '10.0.0.1', toIp: '10.1.0.1' }), /máximo/);
   assert.throws(() => createScanPlan({ runId: 'corto', fromIp: '10.0.0.1', toIp: '10.0.0.1' }), /Identificador/);
 });
+
+test('createScanPlan normaliza la categoría y omite sondeos que no aplican', () => {
+  const all = createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1' });
+  assert.equal(all.category, 'all');
+  assert.equal(all.probePrinters, true);
+
+  const printers = createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1', category: 'IMPRESORAS' });
+  assert.equal(printers.category, 'printer');
+  assert.equal(printers.categoryLabel, 'impresoras');
+  assert.equal(printers.probePrinters, true);
+
+  // Las workstations comparten impresoras (EB0607 → Godex): la columna
+  // «Impresora compartida» necesita el sondeo también en este escaneo.
+  const workstations = createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1', category: 'workstation' });
+  assert.equal(workstations.category, 'workstation');
+  assert.equal(workstations.probePrinters, true);
+  assert.equal(workstations.scanPorts, true);
+
+  // Un false explícito sigue mandando sobre la categoría.
+  const sinSondeo = createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1', category: 'workstation', probePrinters: false });
+  assert.equal(sinSondeo.probePrinters, false);
+
+  const servers = createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1', category: 'server', scanPorts: false });
+  assert.equal(servers.category, 'server');
+  assert.equal(servers.scanPorts, true);
+  assert.equal(servers.probePrinters, false);
+
+  assert.throws(
+    () => createScanPlan({ fromIp: '10.0.0.1', toIp: '10.0.0.1', category: 'inexistente' }),
+    /Categoría/
+  );
+});

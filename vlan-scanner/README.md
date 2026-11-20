@@ -46,6 +46,8 @@ Los archivos compilados quedan en la carpeta `dist/`:
 - **Identificación de fabricante** — base de datos OUI integrada (Cisco, HP, Dell, Ubiquiti, TP-Link, etc.)
 - **Escaneo de puertos** — SSH, HTTP, HTTPS, RDP, SMB, FTP, Telnet, VNC, etc.
 - **Clasificación automática** — router, switch, server, workstation, VM, VoIP, cámara
+- **Escaneo por categoría** — limita los resultados a impresoras, workstations, servidores,
+  grabadores/cámaras, VoIP, equipos de red, móviles o máquinas virtuales
 
 ### VLANs
 - Configuración manual de VLANs con ID, nombre, subred y color

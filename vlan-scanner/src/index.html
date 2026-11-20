@@ -33,6 +33,11 @@
     </div>
     <div class="sep"></div>
     <div class="toolbar-section">
+      <label class="lbl" for="scan-category">Categoría:</label>
+      <select id="scan-category" title="Limita el escaneo a un solo tipo de dispositivo"></select>
+    </div>
+    <div class="sep"></div>
+    <div class="toolbar-section">
       <label class="lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer">
         <input type="checkbox" id="chk-ports" checked> Puertos
       </label>
@@ -145,6 +150,7 @@
     <div class="sb-item" id="sb-iface">Interfaz: <span class="val">—</span></div>
   </footer>
 
+  <script src="./shared/scan-categories.js"></script>
   <script src="./renderer/core/dom.js"></script>
   <script src="./renderer/core/ip-range.js"></script>
   <script src="./renderer/core/catalogs.js"></script>

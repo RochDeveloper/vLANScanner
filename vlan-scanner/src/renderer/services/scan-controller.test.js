@@ -41,6 +41,7 @@ test('ScanController mantiene stopping hasta evento terminal e ignora eventos ta
   });
   controller.initialize();
   const execution = controller.start({ fromIp: '10.0.0.1', toIp: '10.0.0.1', scanPorts: false, resolveHostnames: true });
+  assert.equal(network.request.category, 'all');
   await controller.stop();
   assert.equal(network.cancelled, 'scan-controller-1');
   assert.deepEqual(statuses, ['running', 'stopping']);

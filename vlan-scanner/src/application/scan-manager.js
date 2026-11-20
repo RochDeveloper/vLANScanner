@@ -35,18 +35,19 @@ class ScanManager {
         onProgress: (progress) => this.send('scan-progress', run.sender, progress),
         onHostFound: (event) => this.send('scan-host-found', run.sender, event)
       });
-      const summary = { runId: run.runId, status: 'completed', hosts, found: hosts.length };
+      const summary = { runId: run.runId, status: 'completed', category: run.plan.category, hosts, found: hosts.length };
       this.sendState(run.sender, run, { scanned: run.plan.total, total: run.plan.total }, summary);
       return summary;
     } catch (error) {
       if (error?.name === 'AbortError' || run.controller.signal.aborted) {
-        const summary = { runId: run.runId, status: 'cancelled', hosts: [], found: 0 };
+        const summary = { runId: run.runId, status: 'cancelled', category: run.plan.category, hosts: [], found: 0 };
         this.sendState(run.sender, run, this.lastProgress(run), summary);
         return summary;
       }
       this.sendState(run.sender, run, this.lastProgress(run), {
         runId: run.runId,
         status: 'failed',
+        category: run.plan.category,
         error: { code: 'SCAN_FAILED', message: error.message || 'Error de escaneo' }
       });
       throw error;

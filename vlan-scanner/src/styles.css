@@ -53,6 +53,7 @@ input[type=number] { width: 56px; }
 .btn:disabled { opacity: 0.4; cursor: default; }
 .btn-icon { padding: 5px 8px; }
 #iface-select { min-width: 180px; }
+#scan-category { min-width: 175px; }
 
 #main { flex: 1; display: flex; overflow: hidden; }
 #left-panel { width: 220px; background: var(--bg1); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }

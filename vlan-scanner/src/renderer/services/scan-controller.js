@@ -64,6 +64,7 @@
           runId: run.runId,
           fromIp: request.fromIp,
           toIp: request.toIp,
+          category: request.category || 'all',
           scanPorts: Boolean(request.scanPorts),
           resolveHostnames: Boolean(request.resolveHostnames)
         });

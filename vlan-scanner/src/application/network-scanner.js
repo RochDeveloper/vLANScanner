@@ -2,6 +2,7 @@
 
 const { throwIfAborted } = require('../domain/cancellation');
 const { numberToIPv4 } = require('../domain/ip-address');
+const { matchesScanCategory } = require('../shared/scan-categories');
 
 class NetworkScanner {
   constructor({ pingProbe, hostEnricher, batchSize = 24 } = {}) {
@@ -66,6 +67,7 @@ class NetworkScanner {
         });
 
         throwIfAborted(signal);
+        if (!matchesScanCategory(host.deviceType, plan.category)) continue;
         results.push(host);
         onHostFound({ runId: plan.runId, host });
       }

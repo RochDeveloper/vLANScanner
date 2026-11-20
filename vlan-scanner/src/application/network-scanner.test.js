@@ -35,3 +35,26 @@ test('NetworkScanner emite progreso monotónico y hosts enriquecidos', async () 
   assert.ok(progress.every((event) => event.runId === plan.runId));
   assert.ok(progress.some((event) => event.phase === 'enriching'));
 });
+
+test('NetworkScanner descarta los hosts que no pertenecen a la categoría', async () => {
+  const categoryPlan = { ...plan, category: 'printer' };
+  const pingProbe = {
+    async probe(ip) {
+      return { ip, alive: true, latencyMs: 1, ttl: 64 };
+    }
+  };
+  const types = { '0.0.0.2': 'printer', '0.0.0.3': 'workstation' };
+  const hostEnricher = {
+    async enrich(ping) {
+      return { ip: ping.ip, deviceType: types[ping.ip] || 'workstation' };
+    }
+  };
+  const scanner = new NetworkScanner({ pingProbe, hostEnricher, batchSize: 3 });
+  const found = [];
+  const result = await scanner.scan(categoryPlan, {
+    onHostFound: (event) => found.push(event.host)
+  });
+
+  assert.deepEqual(result.map((host) => host.ip), ['0.0.0.2']);
+  assert.deepEqual(found.map((host) => host.ip), ['0.0.0.2']);
+});

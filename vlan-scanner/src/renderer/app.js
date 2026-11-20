@@ -4,6 +4,8 @@
     rangeIsPending,
     VlanService,
     DEVICE_ICONS,
+    SCAN_CATEGORIES,
+    getScanCategory,
     NetworkAdapter,
     PlatformAdapter,
     ScanController,
@@ -34,7 +36,10 @@
         selectedIp: null
       };
       this.scanState = { status: 'idle', progress: { scanned: 0, total: 0 } };
+      this.activeCategory = 'all';
       this.elements = this.collectElements();
+      this.renderCategories();
+      this.syncCategoryControls();
       this.scanController = new ScanController({
         networkPort: this.network,
         onStatus: (status) => this.handleScanStatus(status),
@@ -61,6 +66,7 @@
         rangeHint: byId('range-hint'),
         scanPorts: byId('chk-ports'),
         resolveHostnames: byId('chk-hostname'),
+        scanCategory: byId('scan-category'),
         scan: byId('btn-scan'),
         stop: byId('btn-stop'),
         exportCsv: byId('btn-export-csv'),
@@ -87,6 +93,16 @@
           reset: byId('topo-reset')
         }
       };
+    }
+
+    renderCategories() {
+      const select = this.elements.scanCategory;
+      if (!select) return;
+      select.replaceChildren();
+      for (const category of SCAN_CATEGORIES) {
+        select.add(new Option(`${category.icon} ${category.label}`, category.id));
+      }
+      select.value = 'all';
     }
 
     createViews() {
@@ -152,6 +168,7 @@
       this.elements.ifaceSelect.addEventListener('change', () => this.onInterfaceChange());
       this.elements.ipFrom.addEventListener('input', () => this.updateRangeHint());
       this.elements.ipTo.addEventListener('input', () => this.updateRangeHint());
+      this.elements.scanCategory.addEventListener('change', () => this.syncCategoryControls());
       this.elements.search.addEventListener('input', () => {
         this.ui.search = this.elements.search.value;
         this.scheduleRender();
@@ -221,6 +238,7 @@
       this.ui.activeFilter = 'all';
       this.ui.search = '';
       this.runningRange = { from: plan.fromIp, to: plan.toIp };
+      this.activeCategory = this.elements.scanCategory?.value || 'all';
       this.elements.search.value = '';
       this.elements.statScanned.textContent = '0';
       this.elements.progress.style.width = '0%';
@@ -234,6 +252,7 @@
         await this.scanController.start({
           fromIp: plan.fromIp,
           toIp: plan.toIp,
+          category: this.activeCategory,
           scanPorts: this.elements.scanPorts.checked,
           resolveHostnames: this.elements.resolveHostnames.checked
         });
@@ -261,11 +280,21 @@
       this.elements.scan.disabled = scanning;
       this.elements.stop.disabled = !scanning;
       this.elements.ifaceSelect.disabled = scanning;
-      this.elements.scanPorts.disabled = scanning;
       this.elements.resolveHostnames.disabled = scanning;
+      if (this.elements.scanCategory) this.elements.scanCategory.disabled = scanning;
+      this.syncCategoryControls();
       // El rango se lee al iniciar el escaneo: los campos quedan editables
       // durante la ejecucion para poder corregir la sintaxis sin detenerla.
       this.updateRangeHint();
+    }
+
+    syncCategoryControls() {
+      const focused = (this.elements.scanCategory?.value || 'all') !== 'all';
+      if (focused) this.elements.scanPorts.checked = true;
+      this.elements.scanPorts.disabled = Boolean(this.scanning) || focused;
+      this.elements.scanPorts.title = focused
+        ? 'Obligatorio al escanear por categoría: los puertos se usan para clasificar el equipo'
+        : '';
     }
 
     updateRangeHint() {
@@ -283,6 +312,11 @@
       return pending;
     }
 
+    categoryFocus() {
+      const category = getScanCategory(this.activeCategory);
+      return category.id === 'all' ? '' : ` — solo ${category.shortLabel}`;
+    }
+
     handleScanStatus(status) {
       this.scanState = status;
       if (status.progress && Number.isFinite(Number(status.progress.scanned))) {
@@ -291,12 +325,13 @@
       if (status.status === 'running') {
         const range = this.runningRange ? `${this.runningRange.from} - ${this.runningRange.to}` : '';
         const total = status.progress.total.toLocaleString('es-ES');
-        this.setStatus(range ? `Escaneando ${range} (${total} direcciones)...` : `Escaneando ${total} direcciones...`);
+        const focus = this.categoryFocus();
+        this.setStatus(range ? `Escaneando ${range} (${total} direcciones)${focus}...` : `Escaneando ${total} direcciones${focus}...`);
       } else if (status.status === 'stopping') {
         this.setStatus('Deteniendo el escaneo...');
       } else if (status.status === 'completed') {
         this.elements.progress.style.width = '100%';
-        this.setStatus(`Escaneo completado — ${this.hosts.length} hosts encontrados`);
+        this.setStatus(`Escaneo completado${this.categoryFocus()} — ${this.hosts.length} hosts encontrados`);
       } else if (status.status === 'cancelled') {
         this.setStatus(`Escaneo detenido — ${status.progress.scanned || 0}/${status.progress.total || 0} direcciones comprobadas`);
       } else if (status.status === 'failed') {
